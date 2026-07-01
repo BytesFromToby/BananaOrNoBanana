@@ -212,7 +212,7 @@ def test_players_endpoint_hides_api_key(client):
     data = resp.json()
     assert set(data) == {"left", "right"}
     for seat in ("left", "right"):
-        assert set(data[seat]) == {"kind", "provider", "model"}
+        assert set(data[seat]) == {"kind", "provider", "model", "base_url", "has_key"}
         assert "api_key" not in data[seat]
 
 
@@ -293,3 +293,96 @@ def test_advance_forces_answer_and_defaults_when_model_wont_comply(
 def test_advance_unknown_round_returns_404(client):
     resp = client.post("/api/round/nope/advance")
     assert resp.status_code == 404
+
+
+# --- Seat credential entry: PUT /api/players/{seat} ---
+
+@pytest.fixture
+def env_file(tmp_path, monkeypatch):
+    import server.app as app_module
+    path = tmp_path / ".env"
+    monkeypatch.setattr(app_module, "ENV_PATH", str(path))
+    return path
+
+
+@pytest.fixture
+def fresh_players(monkeypatch):
+    import server.app as app_module
+    players = {
+        "left": PlayerConfig(seat="left", kind="ai", provider="ollama",
+                             model="qwen3:8b", base_url="http://127.0.0.1:11434"),
+        "right": PlayerConfig(seat="right", kind="human"),
+    }
+    monkeypatch.setattr(app_module, "PLAYERS", players)
+    return players
+
+
+def test_put_player_updates_seat_and_never_returns_key(client, env_file, fresh_players):
+    resp = client.put("/api/players/left", json={
+        "kind": "ai", "provider": "anthropic",
+        "model": "claude-opus-4-8", "api_key": "sk-secret",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["provider"] == "anthropic"
+    assert data["model"] == "claude-opus-4-8"
+    assert data["has_key"] is True
+    assert "api_key" not in data
+    assert "sk-secret" not in resp.text
+    # GET reflects the change and still never leaks the key.
+    got = client.get("/api/players")
+    assert got.json()["left"]["provider"] == "anthropic"
+    assert "sk-secret" not in got.text
+
+
+def test_put_player_persists_to_env_file(client, env_file, fresh_players):
+    client.put("/api/players/right", json={
+        "kind": "ai", "provider": "openai_compat", "model": "gpt-x",
+        "base_url": "https://api.openai.com/v1", "api_key": "sk-r",
+    })
+    text = env_file.read_text(encoding="utf-8")
+    assert "RIGHT_PLAYER_PROVIDER=openai_compat" in text
+    assert "RIGHT_PLAYER_API_KEY=sk-r" in text
+
+
+def test_put_player_omitted_key_keeps_saved_key(client, env_file, fresh_players):
+    fresh_players["left"].api_key = "sk-old"
+    resp = client.put("/api/players/left", json={"model": "qwen3:14b"})
+    assert resp.status_code == 200
+    assert fresh_players["left"].api_key == "sk-old"
+    assert fresh_players["left"].model == "qwen3:14b"
+
+
+def test_put_player_invalid_config_is_422(client, env_file, fresh_players):
+    resp = client.put("/api/players/left", json={"kind": "ai", "model": ""})
+    assert resp.status_code == 422
+    resp = client.put("/api/players/left", json={"provider": "gemini", "model": "m"})
+    assert resp.status_code == 422
+
+
+def test_put_player_unknown_seat_is_404(client, env_file, fresh_players):
+    assert client.put("/api/players/middle", json={"kind": "human"}).status_code == 404
+
+
+def test_round_uses_left_seat_model_when_no_override(fake_ollama):
+    """Seat-model precedence: a configured non-Ollama seat model must not be
+    clobbered by config.json's Ollama default."""
+    from server.config import load_config
+    players = {
+        "left": PlayerConfig(seat="left", kind="ai", provider="anthropic",
+                             model="claude-opus-4-8", api_key="k"),
+        "right": PlayerConfig(seat="right", kind="human"),
+    }
+    r = game.create_round(load_config(), players=players)
+    assert r.model == "claude-opus-4-8"
+    assert r.left.model == "claude-opus-4-8"
+    # An explicit per-round override still wins.
+    r2 = game.create_round(load_config(), overrides={"model": "qwen3:8b"}, players=players)
+    assert r2.model == "qwen3:8b"
+
+
+def test_round_rejects_human_box_holder(client, fresh_players):
+    fresh_players["left"] = PlayerConfig(seat="left", kind="human")
+    resp = client.post("/api/round")
+    assert resp.status_code == 422
+    assert "left seat" in resp.json()["detail"]

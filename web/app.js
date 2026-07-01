@@ -21,8 +21,74 @@ async function loadModels() {
       if (name === data.default) opt.selected = true;
       select.appendChild(opt);
     }
+    // Same list feeds the seat editors' model fields as suggestions (Ollama only).
+    const datalist = el("ollama-models");
+    datalist.innerHTML = "";
+    for (const name of data.models) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      datalist.appendChild(opt);
+    }
   } catch (e) {
     /* Ollama not reachable; dropdown stays empty and the server default is used. */
+  }
+}
+
+// --- Seat editors (two credential slots: left/Box Holder, right/Guesser) ---
+function seatEditor(seat) {
+  return el(`seat-${seat}`);
+}
+
+function seatField(seat, field) {
+  return seatEditor(seat).querySelector(`[data-field="${field}"]`);
+}
+
+function fillSeatEditor(seat) {
+  const cfg = PLAYERS[seat];
+  seatField(seat, "kind").value = cfg.kind;
+  seatField(seat, "provider").value = cfg.provider || "ollama";
+  seatField(seat, "model").value = cfg.model || "";
+  seatField(seat, "base_url").value = cfg.base_url || "";
+  const keyInput = seatField(seat, "api_key");
+  keyInput.value = "";
+  keyInput.placeholder = cfg.has_key
+    ? "•••• saved — leave blank to keep"
+    : "not needed for Ollama";
+  refreshSeatEditor(seat);
+}
+
+function refreshSeatEditor(seat) {
+  const isAI = seatField(seat, "kind").value === "ai";
+  seatEditor(seat).querySelector(".ai-fields").classList.toggle("hidden", !isAI);
+}
+
+async function saveSeat(seat) {
+  const status = seatEditor(seat).querySelector(".seat-status");
+  const body = {
+    kind: seatField(seat, "kind").value,
+    provider: seatField(seat, "provider").value,
+    model: seatField(seat, "model").value.trim(),
+    base_url: seatField(seat, "base_url").value.trim(),
+  };
+  // Blank key field = keep the saved key; only send a value the user typed.
+  const key = seatField(seat, "api_key").value;
+  if (key) body.api_key = key;
+  status.textContent = "saving…";
+  try {
+    const resp = await fetch(`/api/players/${seat}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      status.textContent = err.detail || "invalid seat config";
+      return;
+    }
+    status.textContent = "saved ✓";
+    await loadPlayers();
+  } catch (e) {
+    status.textContent = "server unreachable";
   }
 }
 
@@ -44,17 +110,21 @@ async function loadPlayers() {
   el("left-sub").textContent = PLAYERS.left.model || PLAYERS.left.provider;
   el("right-title").textContent = PLAYERS.right.kind === "human" ? "You (Guesser)" : "Guesser";
   el("right-sub").textContent = describeSeat(PLAYERS.right);
-  // The model dropdown only makes sense for the Ollama-backed Left seat.
+  // The per-round model dropdown only makes sense for the Ollama-backed Left seat.
   el("model-select-row").classList.toggle("hidden", PLAYERS.left.provider !== "ollama");
+  fillSeatEditor("left");
+  fillSeatEditor("right");
 }
 
 function currentSettings() {
-  const model = el("model-select").value;
   const s = {
     turn_limit: Number(el("turn-input").value),
     temperature: Number(el("temp-input").value),
   };
-  if (model) s.model = model;
+  // The dropdown holds Ollama names — only meaningful when the Left seat IS Ollama;
+  // for any other provider the seat's own configured model governs.
+  const model = el("model-select").value;
+  if (model && PLAYERS.left.provider === "ollama") s.model = model;
   return s;
 }
 const dialogue = el("dialogue");
@@ -235,8 +305,13 @@ el("temp-input").addEventListener("input", (e) => {
   el("temp-value").textContent = e.target.value;
 });
 el("autoplay-btn").addEventListener("click", autoPlay);
-loadModels();
-loadPlayers();
+for (const seat of ["left", "right"]) {
+  seatField(seat, "kind").addEventListener("change", () => refreshSeatEditor(seat));
+  seatEditor(seat)
+    .querySelector(".seat-save")
+    .addEventListener("click", () => saveSeat(seat));
+}
+loadModels().then(loadPlayers);
 el("say-btn").addEventListener("click", say);
 el("say-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") say();

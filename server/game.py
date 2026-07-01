@@ -75,22 +75,33 @@ def create_round(config: dict, overrides: dict = None, rng=random, players: dict
     environment (LEFT_PLAYER_*/RIGHT_PLAYER_*) if omitted. The per-round `model` override, if
     given, applies to the left seat (the Box Holder) only.
     """
-    eff = effective_settings(config, overrides or {})
+    overrides = overrides or {}
+    eff = effective_settings(config, overrides)
     if players is None:
         players = load_players(os.environ)
     left_base = players["left"]
+    if left_base.kind != "ai":
+        # Roadmap item 6 (human Box Holder UI) isn't built; fail at round creation
+        # with a clear message instead of crashing mid-stream.
+        raise ValueError("a human Box Holder isn't supported yet — set the left seat to AI")
+    # Model precedence: per-round override > the seat's own configured model >
+    # the config.json default (an Ollama name — wrong for a non-Ollama seat).
+    if overrides.get("model"):
+        left_model = eff["box_holder_model"]
+    else:
+        left_model = left_base.model or eff["box_holder_model"]
     left = PlayerConfig(
         seat="left",
         kind=left_base.kind,
         provider=left_base.provider,
-        model=eff["box_holder_model"],
+        model=left_model,
         base_url=left_base.base_url,
         api_key=left_base.api_key,
     )
     r = Round(
         round_id=uuid.uuid4().hex,
         box_contents=flip_coin(rng),
-        model=eff["box_holder_model"],
+        model=left_model,
         turns_remaining=eff["turn_limit"],
         turn_limit=eff["turn_limit"],
         temperature=eff["temperature"],

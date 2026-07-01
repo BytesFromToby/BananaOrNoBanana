@@ -181,6 +181,23 @@ body {
   border-radius: 6px; background: #fff; color: var(--deep);
 }
 .setting input[type="range"] { width: 100%; accent-color: var(--orange); }
+.setting input[type="text"],
+.setting input[type="password"] {
+  width: 100%; padding: 8px; font-size: 15px; border: 3px solid var(--gold);
+  border-radius: 6px; background: #fff; color: var(--deep); box-sizing: border-box;
+}
+
+.seat-editor {
+  margin: 12px 0; padding: 8px 12px 12px;
+  border: 3px solid var(--gold); border-radius: 8px;
+}
+.seat-editor legend {
+  padding: 0 6px; font-size: 13px; font-weight: bold;
+  text-transform: uppercase; color: var(--brown);
+}
+.seat-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.seat-save { font-size: 13px; padding: 6px 12px; }
+.seat-status { font-size: 12px; font-family: Georgia, serif; color: var(--brown); }
 
 .reveal {
   max-width: 900px; margin: 20px auto; padding: 20px; text-align: center;

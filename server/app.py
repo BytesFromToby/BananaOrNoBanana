@@ -16,10 +16,11 @@ from server.config import load_config
 from server.host import verdict_line
 from server.log import append_round
 from server.ollama_client import list_models
-from server.players import load_players, public_view
+from server.players import build_seat, load_players, persist_seat_env, public_view
 
 CONFIG = load_config()
 PLAYERS = load_players(os.environ)
+ENV_PATH = ".env"  # seat config is persisted here; tests point this at a tmp file
 
 app = FastAPI(title="Banana or No Banana")
 
@@ -38,6 +39,14 @@ class RoundBody(BaseModel):
     temperature: Optional[float] = None
 
 
+class SeatBody(BaseModel):
+    kind: Optional[str] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None  # omitted = keep the saved key; "" = clear it
+
+
 @app.get("/api/models")
 async def models():
     return {
@@ -48,8 +57,24 @@ async def models():
 
 @app.get("/api/players")
 async def players():
-    """Browser-safe seat info — kind/provider/model only, never api_key."""
+    """Browser-safe seat info — kind/provider/model/base_url/has_key, never api_key."""
     return {"left": public_view(PLAYERS["left"]), "right": public_view(PLAYERS["right"])}
+
+
+@app.put("/api/players/{seat}")
+async def update_player(seat: str, body: SeatBody):
+    """Configure a seat from the browser (localhost, single user). The API key is
+    write-only: accepted here, persisted to .env, never returned. Replaces the seat
+    object rather than mutating it, so a round already in flight keeps its config."""
+    if seat not in ("left", "right"):
+        raise HTTPException(status_code=404, detail="seat must be 'left' or 'right'")
+    try:
+        cfg = build_seat(seat, body.model_dump(exclude_unset=True), current=PLAYERS[seat])
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    PLAYERS[seat] = cfg
+    persist_seat_env("LEFT_PLAYER" if seat == "left" else "RIGHT_PLAYER", cfg, path=ENV_PATH)
+    return public_view(cfg)
 
 
 @app.post("/api/round")

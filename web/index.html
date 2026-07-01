@@ -50,8 +50,74 @@
         <span>Seats</span>
         <p id="seats-summary" class="seats-summary">Loading seat config&hellip;</p>
       </div>
+
+      <fieldset class="seat-editor" id="seat-left">
+        <legend>Box Holder (Left)</legend>
+        <label class="setting"><span>Player</span>
+          <select data-field="kind">
+            <option value="ai">AI</option>
+            <option value="human">Human</option>
+          </select>
+        </label>
+        <div class="ai-fields">
+          <label class="setting"><span>Provider</span>
+            <select data-field="provider">
+              <option value="ollama">Ollama (local)</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openai_compat">OpenAI-compatible</option>
+            </select>
+          </label>
+          <label class="setting"><span>Model</span>
+            <input data-field="model" type="text" list="ollama-models" placeholder="e.g. qwen3:8b / claude-opus-4-8" autocomplete="off" />
+          </label>
+          <label class="setting"><span>Base URL</span>
+            <input data-field="base_url" type="text" placeholder="provider default" autocomplete="off" />
+          </label>
+          <label class="setting"><span>API key</span>
+            <input data-field="api_key" type="password" placeholder="not needed for Ollama" autocomplete="off" />
+          </label>
+        </div>
+        <div class="seat-actions">
+          <button class="btn seat-save" type="button">Save seat</button>
+          <span class="seat-status" aria-live="polite"></span>
+        </div>
+      </fieldset>
+
+      <fieldset class="seat-editor" id="seat-right">
+        <legend>Guesser (Right)</legend>
+        <label class="setting"><span>Player</span>
+          <select data-field="kind">
+            <option value="human">Human (you)</option>
+            <option value="ai">AI</option>
+          </select>
+        </label>
+        <div class="ai-fields">
+          <label class="setting"><span>Provider</span>
+            <select data-field="provider">
+              <option value="ollama">Ollama (local)</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openai_compat">OpenAI-compatible</option>
+            </select>
+          </label>
+          <label class="setting"><span>Model</span>
+            <input data-field="model" type="text" list="ollama-models" placeholder="e.g. qwen3:8b / claude-opus-4-8" autocomplete="off" />
+          </label>
+          <label class="setting"><span>Base URL</span>
+            <input data-field="base_url" type="text" placeholder="provider default" autocomplete="off" />
+          </label>
+          <label class="setting"><span>API key</span>
+            <input data-field="api_key" type="password" placeholder="not needed for Ollama" autocomplete="off" />
+          </label>
+        </div>
+        <div class="seat-actions">
+          <button class="btn seat-save" type="button">Save seat</button>
+          <span class="seat-status" aria-live="polite"></span>
+        </div>
+      </fieldset>
+      <datalist id="ollama-models"></datalist>
+
       <label class="setting" id="model-select-row">
-        <span>Box Holder model</span>
+        <span>Box Holder model (this round)</span>
         <select id="model-select"></select>
       </label>
       <label class="setting">
