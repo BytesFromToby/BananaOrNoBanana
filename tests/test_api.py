@@ -55,6 +55,20 @@ def reset_rounds():
     game.ROUNDS.clear()
 
 
+@pytest.fixture(autouse=True)
+def default_players(monkeypatch):
+    """Pin the seat config for every test — the suite must not depend on whatever
+    the machine's real .env happens to hold (seats are browser-editable now).
+    Tests that need different seats monkeypatch app.PLAYERS over this."""
+    import server.app as appmod
+
+    monkeypatch.setattr(appmod, "PLAYERS", {
+        "left": PlayerConfig(seat="left", kind="ai", provider="ollama",
+                             model="qwen3:8b", base_url="http://127.0.0.1:11434"),
+        "right": PlayerConfig(seat="right", kind="human"),
+    })
+
+
 @pytest.fixture
 def fake_ollama(monkeypatch):
     fake = FakeOllama()
@@ -293,6 +307,27 @@ def test_advance_forces_answer_and_defaults_when_model_wont_comply(
 def test_advance_unknown_round_returns_404(client):
     resp = client.post("/api/round/nope/advance")
     assert resp.status_code == 404
+
+
+def test_advance_banana_talk_is_not_a_lockin(client, monkeypatch):
+    """Regression: an AI Guesser *talking about* bananas (i.e. playing the game)
+    must not be scored as a lock-in — only an explicit FINAL ANSWER line ends
+    the round on the /advance path."""
+    import server.app as appmod
+
+    monkeypatch.setattr(appmod, "PLAYERS", _ai_guesser_players())
+    fake = FakeDualPlayers(
+        guesser_lines=["So... banana or no banana? You tell me — is there a banana in there?"]
+    )
+    monkeypatch.setattr(game, "chat_stream", fake)
+
+    round_id, _ = _start_round(client)
+    resp = client.post(f"/api/round/{round_id}/advance")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["done"] is False  # the round continues
+    assert round_id in game.ROUNDS
+    assert data["turns_remaining"] == 2
 
 
 # --- Seat credential entry: PUT /api/players/{seat} ---

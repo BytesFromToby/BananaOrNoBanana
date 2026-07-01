@@ -185,7 +185,9 @@ def parse_answer(text: str) -> Optional[str]:
 
     Accepts bare BANANA / NO BANANA / NO_BANANA and the 'FINAL ANSWER: ...' form,
     case-insensitive and tolerant of surrounding text. NO_BANANA is checked first
-    (it contains 'BANANA').
+    (it contains 'BANANA'). This loose parse is for the human /guess endpoint only —
+    the player explicitly pressed a lock-in control, so any answer-shaped text is
+    an answer. AI seats go through parse_final_answer instead.
     """
     if not text:
         return None
@@ -195,6 +197,22 @@ def parse_answer(text: str) -> Optional[str]:
     if "BANANA" in t:
         return BANANA
     return None
+
+
+def parse_final_answer(text: str) -> Optional[str]:
+    """Strict lock-in parse for AI-seat lines (/advance): only an explicit
+    'FINAL ANSWER: BANANA | NO BANANA' counts.
+
+    Nearly every conversational line in this game mentions bananas ("so, banana
+    or no banana?"), so the loose parse above would end AI-vs-AI rounds on the
+    first turn. Case-insensitive, tolerant of surrounding text.
+    """
+    if not text:
+        return None
+    m = re.search(r"FINAL\s+ANSWER\s*[:\-]?\s*(NO[ _]?BANANA|BANANA)", text.upper())
+    if not m:
+        return None
+    return NO_BANANA if m.group(1).startswith("NO") else BANANA
 
 
 def score(answer: str, box_contents: str) -> dict:

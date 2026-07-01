@@ -161,7 +161,9 @@ async def advance(round_id: str):
 
     forced = r.turns_remaining <= 0
     guesser_text = await game.generate_guesser_text(r)
-    answer = game.parse_answer(guesser_text)
+    # Strict parse: only an explicit "FINAL ANSWER:" line locks in — a Guesser
+    # merely *talking about* bananas (i.e. playing the game) continues the round.
+    answer = game.parse_final_answer(guesser_text)
     if answer is None and forced:
         # Safety net: the model didn't comply with the forced lock-in instruction.
         # Default to NO_BANANA rather than loop forever on an out-of-turns round.

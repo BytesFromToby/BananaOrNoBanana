@@ -14,6 +14,7 @@ from server.game import (
     create_round,
     flip_coin,
     parse_answer,
+    parse_final_answer,
     score,
 )
 
@@ -76,3 +77,36 @@ def test_parse_answer_forms(text, expected):
 def test_parse_answer_unparseable_returns_none():
     assert parse_answer("I have no idea") is None
     assert parse_answer("") is None
+
+
+# --- Strict AI-seat lock-in parse (/advance path) ---
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("FINAL ANSWER: BANANA", BANANA),
+        ("FINAL ANSWER: NO BANANA", NO_BANANA),
+        ("final answer: no_banana", NO_BANANA),
+        ("Alright, I've heard enough. FINAL ANSWER: BANANA", BANANA),
+        ("FINAL ANSWER - NO BANANA", NO_BANANA),
+    ],
+)
+def test_parse_final_answer_accepts_explicit_lockins(text, expected):
+    assert parse_final_answer(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # The regression: ordinary game talk mentions bananas constantly and
+        # must NOT read as a lock-in on the AI path.
+        "So... banana or no banana? Convince me.",
+        "You keep saying there's no banana, but the weight says otherwise.",
+        "Is the banana ripe?",
+        "I'll say banana",  # answer-shaped, but not an explicit FINAL ANSWER line
+        "no banana for me",
+        "",
+    ],
+)
+def test_parse_final_answer_ignores_banter(text):
+    assert parse_final_answer(text) is None
