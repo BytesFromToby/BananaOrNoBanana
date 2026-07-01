@@ -5,12 +5,13 @@ One line: *A local, single-player retro game-show deception web app — an AI Bo
 Plumbline: v1.0
 
 ## Stack
-[pending — `architect` fills this when it writes the first spec; the stack is a consequence of *what* gets built]
+Python 3.11+ · FastAPI + uvicorn (server / referee / Ollama proxy / static host / logger) · httpx (async Ollama client) · vanilla HTML/CSS/JS frontend (`web/`) · Ollama (`qwen3:8b`) as the model backend. Round state in-memory; per-round audit log to `logs/rounds.jsonl`. Tests: pytest with a mocked Ollama endpoint.
 
 ## Commands
-- Test: `[pending — architect]`
-- Run/demo: `[pending — architect; must be real, inspector depends on it]`
+- Test: `python -m pytest -q`
+- Run/demo: `python -m uvicorn server.app:app --host 127.0.0.1 --port 8000` — then open `http://127.0.0.1:8000`
 - Shell/OS: PowerShell on Windows — write all Test and Run commands in this dialect
+- UI evidence tool: playwright (python)
 
 ## History
 Mode: **git**   <!-- git (default) | none -->

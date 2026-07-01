@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Banana or No Banana</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="marquee">
+    <div class="bulbs"></div>
+    <h1>Banana <span>or</span> No Banana</h1>
+    <div class="bulbs"></div>
+  </div>
+
+  <div class="host">
+    <span class="host-mic">🎤</span>
+    <span class="host-name">Bot B@rker</span>
+    <p id="host-line" class="host-line">Come on down! Press <b>Start Round</b> to play.</p>
+  </div>
+
+  <main class="stage">
+    <section class="podium" id="podium-box">
+      <h2>Box Holder</h2>
+      <div class="robot">🤖</div>
+      <p class="sub" id="left-sub">qwen3:8b</p>
+    </section>
+
+    <section class="box-area">
+      <div id="box" class="box closed">
+        <div class="box-lid"></div>
+        <div class="box-face">?</div>
+      </div>
+      <p id="turns" class="turns"></p>
+    </section>
+
+    <section class="podium" id="podium-you">
+      <h2 id="right-title">You (Guesser)</h2>
+      <div class="robot">🕵️</div>
+      <p class="sub" id="right-sub">the detective</p>
+    </section>
+  </main>
+
+  <section id="dialogue" class="dialogue"></section>
+
+  <section class="controls">
+    <button id="settings-toggle" class="btn" type="button">⚙ Settings</button>
+    <div id="settings-panel" class="settings-panel hidden">
+      <div class="setting seats-info">
+        <span>Seats</span>
+        <p id="seats-summary" class="seats-summary">Loading seat config&hellip;</p>
+      </div>
+      <label class="setting" id="model-select-row">
+        <span>Box Holder model</span>
+        <select id="model-select"></select>
+      </label>
+      <label class="setting">
+        <span>Guesser turns</span>
+        <input id="turn-input" type="number" min="1" max="20" value="3" />
+      </label>
+      <label class="setting">
+        <span>Temperature (bluff room): <b id="temp-value">0.9</b></span>
+        <input id="temp-input" type="range" min="0" max="1.5" step="0.1" value="0.9" />
+      </label>
+    </div>
+    <button id="start-btn" class="btn big">Start Round</button>
+    <div id="play-controls" class="play-controls hidden">
+      <div class="say-row">
+        <input id="say-input" type="text" placeholder="Ask the Box Holder something..." autocomplete="off" />
+        <button id="say-btn" class="btn">Send</button>
+      </div>
+      <div class="lockin-row">
+        <span class="lockin-label">Lock in:</span>
+        <button id="guess-banana" class="btn guess">FINAL ANSWER: BANANA</button>
+        <button id="guess-nobanana" class="btn guess">FINAL ANSWER: NO BANANA</button>
+      </div>
+    </div>
+    <div id="autoplay-controls" class="play-controls hidden">
+      <button id="autoplay-btn" class="btn big">Auto-Play Round</button>
+    </div>
+  </section>
+
+  <div id="reveal" class="reveal hidden">
+    <p id="reveal-verdict" class="reveal-verdict"></p>
+    <p id="reveal-winner" class="reveal-winner"></p>
+    <button id="again-btn" class="btn big">Play Again</button>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,6 +1,8 @@
 # Banana or No Banana — v1 Spec (MVP)
 
-**Scope:** one complete round of **Human Guesser vs AI Box Holder**, in the browser against a local model, end to end: coin flip → conversation (≤3 guesser turns) → lock-in → reveal → score → logged. Everything else (AI-vs-AI, lab/leaderboard, other seats, LLM-driven host, the win-condition variants) is **deferred** — see §12.
+**Scope:** one complete round of **Human Guesser vs AI Box Holder**, in the browser against a local model, end to end: coin flip → conversation (≤3 guesser turns) → lock-in → reveal → score → logged. Everything else (lab/leaderboard, LLM-driven host, the win-condition variants) is **deferred** — see §12 for the full roadmap.
+
+**Shipped beyond v1 (2026-07-01):** configurable multi-provider player seats — either seat (LeftPlayer = Box Holder, RightPlayer = Guesser) independently human or AI, any AI seat driven by Ollama / OpenAI-compatible / Anthropic, configured via `.env` only (keys never reach the browser); AI-Guesser rounds driven by `POST /api/round/{id}/advance`. Behavior spec: `Planning/specs/banana_spec.md` ("Configurable multi-provider player seats"); rationale: `docs/decisions/banana_2026-07-01.md`.
 
 Builds on PROPOSAL.md. Player prompts are locked in `prompts/`.
 
@@ -45,6 +47,11 @@ Streaming target: pipe Ollama's token stream → response stream → browser (cl
  "guesser_turns_used":2,"final_answer":"NO_BANANA","correct":false,"winner":"box_holder"}
 ```
 
+**Seat-aware log fields (required since the multi-provider seats shipped):** the log is the future leaderboard's and training data's raw material, so every round must be attributable and filterable:
+- `mode` derived from the actual seats (e.g. `ai_guesser_vs_ai_box_holder`), not hardcoded.
+- Per-seat identity: provider + model for each AI seat (e.g. `guesser_provider`, `guesser_model` alongside `box_holder_model`), `"human"` where a human sat.
+- `forced_default: true` whenever the round ended by the deterministic `NO_BANANA` fallback rather than a parsed answer — these rounds must be excludable from the deviation-from-50% metric or they bias it.
+
 ## 6. Model integration
 - `POST {OLLAMA}/api/chat`, `stream:true`, `think:false`, `options:{temperature:0.9}` (the Box Holder wants room to bluff).
 - Messages: `system` = filled Box Holder prompt; then alternating `assistant` (Box Holder's prior lines) / `user` (Guesser's lines). Opening elicited with a hidden `user` kickoff: *"The round has started; give your opening line."*
@@ -71,8 +78,28 @@ Local-only, single user, no auth. One active round at a time is fine. Windows ho
 5. Apply the retro stage + Bot B@rker lines + reveal + sound.
 6. (v2) AI-vs-AI: swap the human seat for the Guesser prompt + a batch runner + the deviation-from-50% leaderboard.
 
-## 12. Deferred (not in v1)
-AI-vs-AI + batch + leaderboard · the other three seats · settings UI · LLM-driven host · sound beyond basics · the win-condition variants (cooperative / hidden) · packaged downloadable.
+## 12. Roadmap — everything wanted, in rough order
+
+What's already in: v1 round loop ✅ · settings UI (model/turn-limit/temperature panel) ✅ · multi-provider human/AI seats + AI-Guesser autoplay ✅.
+
+Still wanted (roughly prioritized; each is its own feature spec when picked up):
+
+1. **Strict AI lock-in parsing** — on the `/advance` path the round ends only on an explicit `FINAL ANSWER:` line (the loose "contains banana" parse is for the human `/guess` button only). Prerequisite for everything below — without it AI-vs-AI rounds end on turn 1.
+2. **Seat-aware logging** (§5 additions above) — prerequisite for the leaderboard.
+3. **AI-vs-AI batch runner + local leaderboard** — the actual experiment. Run N rounds per matchup unattended; leaderboard is win-rate-vs-coin-flip (deviation from 50%) per (box-holder-model × guesser-model), with forced-default rounds excluded. CLI or lab page; this is the project's reason to exist, and it must work fully offline/locally before any of the community layer (item 10) exists.
+4. **Streamed autoplay** — `/advance` (or a successor) streams both seats' lines token-by-token so watching AI-vs-AI feels like live banter, not turn dumps.
+5. **Spectator dramatic irony** — an audience-only view showing the Box Holder's stripped `<think>` reasoning ("it's a banana; I'll say empty") beside the public stage. Never reaches the Guesser — the viewer is in on the con. Reasoning is captured server-side at generation time and logged.
+6. **Human Box Holder seats** — human-vs-AI (out-bluff the detector) and human-vs-human party mode; the seat plumbing already exists, this is the UI for a human left seat.
+7. **LLM-driven Bot B@rker** — color commentary generated per round (reads the transcript at reveal), replacing/augmenting the scripted pools. Host stays showbiz, never judge.
+8. **Sound + Price-is-Right beats** — buzzer/ding/sting/applause/box-open whoosh; "Come on down!" round start; the Big Wheel as the round-settings control; applause-meter/sad-trombone audience flavor.
+9. **Win-condition variants** — cooperative (Box Holder wins when Guesser is *right* — Password/Pyramid mode) and hidden-mode (Guesser must work out friend-or-liar). One incentive line changes; parked until the adversarial data is boring.
+10. **Community arena: packaged downloadable + central results depository + global leaderboard** *(added 2026-07-01 — the end-state vision)*. People download and run the app locally with their **own** API keys (keys never leave their machine; their provider bills stay theirs — this is why it is a local app, not a hosted BYO-key site), pit any models against each other (e.g. Fable 5 vs Opus), and opt-in submit results to a central online depository that keeps all the stats and renders a public leaderboard.
+    - **Distribution:** `uvx`/pipx install first (the audience already has API keys and a terminal); a bundled executable only if demand shows up. Same codebase as today.
+    - **Submission:** an opt-in "submit results" action POSTs completed rounds to a small ingest endpoint. The wire format **is** the seat-aware `rounds.jsonl` schema (§5) plus `schema_version`, `client_version`, and canonical model IDs — get the local log right and the submission format is free.
+    - **Central side (small on purpose):** one validating ingest endpoint + a database + a public read-only leaderboard page (e.g. Cloudflare Worker + D1, or one tiny VPS). No user accounts in v1; anonymous submissions with client-generated run IDs.
+    - **Trust model (decided):** self-reported results from untrusted clients cannot be made cheat-proof, so don't pretend. Mitigations: every submission must include **full transcripts** (fake tallies are cheap; N in-character transcripts are expensive and auditable), rate limiting, and a separate **"verified"** tier for runs executed by the maintainer/trusted parties. Honor system for the rest — banana-sized stakes.
+    - **Side benefit:** the transcript depository doubles as the deception-dialogue corpus for later fine-tuning work.
+11. **Settings persistence** — chosen settings survive a server restart (today: per-round only, `config.json` is the baseline).
 
 ## 13. Decision log
 - Adversarial bluff (Box Holder wins on a wrong guess) — the equilibrium-deviation experiment is the point.

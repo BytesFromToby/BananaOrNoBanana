@@ -24,3 +24,9 @@ npm-debug.log*
 # Logs / env
 *.log
 .env
+
+# Runtime round audit log (data, not source)
+logs/
+
+# Claude Code local permissions (machine-local)
+.claude/settings.local.json

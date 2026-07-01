@@ -1,0 +1,8 @@
+{
+  "turn_limit": 3,
+  "box_holder_model": "qwen3:8b",
+  "temperature": 0.9,
+  "prior": 0.5,
+  "ollama_url": "http://127.0.0.1:11434",
+  "seat": "human_guesser"
+}
