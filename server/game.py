@@ -24,6 +24,15 @@ _FORCE_ANSWER = (
     "You are out of turns. Reply with only your lock-in line: "
     "FINAL ANSWER: BANANA or FINAL ANSWER: NO BANANA."
 )
+# Injected for the AI Guesser each turn (never into the transcript/log). Without
+# it, small local models see only the lock-in format and "autoguess" on turn 1 —
+# they're never told the turn mechanic exists. Verified live: qwen3:8b insta-locks
+# without this note and interrogates with it.
+_TURN_NOTE = (
+    "\n\n[Bot B@rker, host] You have {remaining} of your {limit} questioning turns left. "
+    "This message is a turn you can spend: reply with a question or probe for the "
+    "Box Holder, or lock in now with FINAL ANSWER: only if you are already confident."
+)
 _PROMPT_PATH = os.path.join("prompts", "box_holder.md")
 _GUESSER_PROMPT_PATH = os.path.join("prompts", "guesser.md")
 
@@ -161,14 +170,24 @@ def build_guesser_system() -> str:
 
 
 def _messages_for_guesser(r: Round) -> list:
-    """System + transcript from the Guesser's POV (its own lines as assistant); forces
-    a lock-in line once turns are exhausted."""
+    """System + transcript from the Guesser's POV (its own lines as assistant).
+
+    Host mechanics are injected into what the model sees but never stored in the
+    transcript: a turn-status note while turns remain (or the Guesser autoguesses
+    on turn 1), and the forced lock-in once turns are exhausted.
+    """
     messages = [{"role": "system", "content": build_guesser_system()}]
     for entry in r.transcript:
         role = "assistant" if entry["speaker"] == "guesser" else "user"
         messages.append({"role": role, "content": entry["text"]})
     if r.turns_remaining <= 0:
         messages.append({"role": "user", "content": _FORCE_ANSWER})
+    else:
+        note = _TURN_NOTE.format(remaining=r.turns_remaining, limit=r.turn_limit)
+        if messages[-1]["role"] == "user":
+            messages[-1] = {"role": "user", "content": messages[-1]["content"] + note}
+        else:
+            messages.append({"role": "user", "content": note.strip()})
     return messages
 
 

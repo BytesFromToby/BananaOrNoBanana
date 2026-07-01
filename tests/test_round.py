@@ -110,3 +110,40 @@ def test_parse_final_answer_accepts_explicit_lockins(text, expected):
 )
 def test_parse_final_answer_ignores_banter(text):
     assert parse_final_answer(text) is None
+
+
+# --- AI-Guesser turn-status injection (host mechanics, never in the transcript) ---
+
+def _guesser_round(turns_remaining):
+    from server.game import Round
+    from server.players import PlayerConfig
+    return Round(
+        round_id="x", box_contents=EMPTY, model="m",
+        turns_remaining=turns_remaining, turn_limit=3,
+        left=PlayerConfig(seat="left", kind="ai", provider="ollama", model="m"),
+        right=PlayerConfig(seat="right", kind="ai", provider="ollama", model="m"),
+        transcript=[{"speaker": "box_holder", "turn": 0, "text": "It's empty, trust me."}],
+    )
+
+
+def test_guesser_sees_turn_note_while_turns_remain():
+    from server.game import _messages_for_guesser
+    msgs = _messages_for_guesser(_guesser_round(turns_remaining=3))
+    assert msgs[-1]["role"] == "user"
+    assert "It's empty, trust me." in msgs[-1]["content"]  # opening still there
+    assert "3 of your 3 questioning turns" in msgs[-1]["content"]
+    assert "FINAL ANSWER" in msgs[-1]["content"]  # the note names the lock-in form
+
+
+def test_forced_lockin_replaces_turn_note_at_zero_turns():
+    from server.game import _messages_for_guesser
+    msgs = _messages_for_guesser(_guesser_round(turns_remaining=0))
+    assert msgs[-1]["content"].startswith("You are out of turns")
+    assert "questioning turns left" not in msgs[-1]["content"]
+
+
+def test_turn_note_never_enters_transcript():
+    r = _guesser_round(turns_remaining=2)
+    from server.game import _messages_for_guesser
+    _messages_for_guesser(r)
+    assert all("questioning turns" not in e["text"] for e in r.transcript)
