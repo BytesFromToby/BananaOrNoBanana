@@ -4,14 +4,38 @@ import os
 from datetime import datetime, timezone
 
 
-def append_round(r, config, final_answer, correct, winner, path="logs/rounds.jsonl"):
-    """Append exactly one JSON line describing the completed round."""
+def _seat_identity(cfg):
+    """(provider, model) for a seat; a human seat logs as ("human", "")."""
+    if cfg is None or cfg.kind != "ai":
+        return "human", ""
+    return cfg.provider, cfg.model
+
+
+def append_round(r, config, final_answer, correct, winner, forced_default=False,
+                 path="logs/rounds.jsonl"):
+    """Append exactly one JSON line describing the completed round.
+
+    The log doubles as leaderboard/submission data, so every round must be
+    attributable: mode is derived from the actual seats, each AI seat carries
+    provider+model, and rounds ended by the deterministic NO_BANANA fallback
+    are flagged so the deviation-from-50% metric can exclude them.
+    """
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    guesser_provider, guesser_model = _seat_identity(r.right)
+    box_holder_provider = r.left.provider if r.left is not None else ""
+    mode = (
+        "ai_guesser_vs_ai_box_holder"
+        if guesser_provider != "human"
+        else "human_guesser_vs_ai_box_holder"
+    )
     record = {
         "round_id": r.round_id,
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "mode": "human_guesser_vs_ai_box_holder",
+        "mode": mode,
+        "box_holder_provider": box_holder_provider,
         "box_holder_model": r.model,
+        "guesser_provider": guesser_provider,
+        "guesser_model": guesser_model,
         "box_contents": r.box_contents,
         "turn_limit": r.turn_limit,
         "transcript": r.transcript,
@@ -19,6 +43,7 @@ def append_round(r, config, final_answer, correct, winner, path="logs/rounds.jso
         "final_answer": final_answer,
         "correct": correct,
         "winner": winner,
+        "forced_default": forced_default,
     }
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")

@@ -164,7 +164,8 @@ async def advance(round_id: str):
     # Strict parse: only an explicit "FINAL ANSWER:" line locks in — a Guesser
     # merely *talking about* bananas (i.e. playing the game) continues the round.
     answer = game.parse_final_answer(guesser_text)
-    if answer is None and forced:
+    defaulted = answer is None and forced
+    if defaulted:
         # Safety net: the model didn't comply with the forced lock-in instruction.
         # Default to NO_BANANA rather than loop forever on an out-of-turns round.
         answer = game.NO_BANANA
@@ -172,7 +173,8 @@ async def advance(round_id: str):
     if answer is not None:
         result = game.score(answer, r.box_contents)
         append_round(
-            r, CONFIG, final_answer=answer, correct=result["correct"], winner=result["winner"]
+            r, CONFIG, final_answer=answer, correct=result["correct"],
+            winner=result["winner"], forced_default=defaulted,
         )
         r.status = "DONE"
         box_contents = r.box_contents

@@ -1,23 +1,29 @@
-"""Slice 5 — round logging (a14 one JSON line, a15 all fields, a16 transcript fidelity)."""
+"""Slice 5 — round logging (a14 one JSON line, a15 all fields, a16 transcript fidelity).
+Amended 2026-07-01: seat-aware fields (mode from seats, per-seat provider/model, forced_default)."""
 import json
 
 from server.config import DEFAULTS
 from server.game import Round
 from server.log import append_round
+from server.players import PlayerConfig
 
 REQUIRED_FIELDS = {
-    "round_id", "ts", "mode", "box_holder_model", "box_contents", "turn_limit",
+    "round_id", "ts", "mode", "box_holder_provider", "box_holder_model",
+    "guesser_provider", "guesser_model", "box_contents", "turn_limit",
     "transcript", "guesser_turns_used", "final_answer", "correct", "winner",
+    "forced_default",
 }
 
 
-def _round():
+def _round(right=None):
     return Round(
         round_id="abc123",
         box_contents="EMPTY",
         model="qwen3:8b",
         turns_remaining=1,
         turn_limit=3,
+        left=PlayerConfig(seat="left", kind="ai", provider="ollama", model="qwen3:8b"),
+        right=right or PlayerConfig(seat="right", kind="human"),
         transcript=[
             {"speaker": "box_holder", "turn": 0, "text": "Welcome!"},
             {"speaker": "guesser", "turn": 1, "text": "banana?"},
@@ -46,6 +52,38 @@ def test_object_has_all_fields(tmp_path):
     assert obj["mode"] == "human_guesser_vs_ai_box_holder"
     assert obj["ts"].endswith("Z")
     assert obj["guesser_turns_used"] == 2  # turn_limit 3 - turns_remaining 1
+
+
+def test_mode_and_seats_derived_not_hardcoded(tmp_path):
+    """Amended Done-when: mode follows the actual seats; each AI seat is attributable."""
+    path = str(tmp_path / "rounds.jsonl")
+    ai_right = PlayerConfig(seat="right", kind="ai", provider="anthropic", model="claude-opus-4-8")
+    append_round(_round(right=ai_right), dict(DEFAULTS), "BANANA", False, "box_holder", path=path)
+    obj = json.loads(open(path, encoding="utf-8").read().splitlines()[0])
+    assert obj["mode"] == "ai_guesser_vs_ai_box_holder"
+    assert obj["box_holder_provider"] == "ollama"
+    assert obj["guesser_provider"] == "anthropic"
+    assert obj["guesser_model"] == "claude-opus-4-8"
+
+
+def test_human_guesser_logged_as_human(tmp_path):
+    path = str(tmp_path / "rounds.jsonl")
+    append_round(_round(), dict(DEFAULTS), "NO_BANANA", True, "guesser", path=path)
+    obj = json.loads(open(path, encoding="utf-8").read().splitlines()[0])
+    assert obj["guesser_provider"] == "human"
+    assert obj["guesser_model"] == ""
+
+
+def test_forced_default_flag(tmp_path):
+    """Amended Done-when: fallback-ended rounds are distinguishable so the
+    deviation-from-50% metric can exclude them."""
+    path = str(tmp_path / "rounds.jsonl")
+    append_round(_round(), dict(DEFAULTS), "NO_BANANA", True, "guesser",
+                 forced_default=True, path=path)
+    append_round(_round(), dict(DEFAULTS), "NO_BANANA", True, "guesser", path=path)
+    lines = open(path, encoding="utf-8").read().splitlines()
+    assert json.loads(lines[0])["forced_default"] is True
+    assert json.loads(lines[1])["forced_default"] is False
 
 
 def test_transcript_order_and_turns_preserved(tmp_path):
