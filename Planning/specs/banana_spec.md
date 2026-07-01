@@ -125,6 +125,20 @@ A settings panel lets the player choose, before starting a round, which installe
 - Against a live cloud provider (OpenAI-compatible or Anthropic) with a real API key, a LeftPlayer or RightPlayer seat produces in-character streamed/generated lines with no leaked reasoning.  `[human-required]`
 - The settings panel shows both seats' provider/model (editable since the 2026-07-01 seat-editor amendment) and, when the right seat is AI, replaces the manual say/lock-in controls with an Auto-Play control that plays the round to a visible reveal.  `[human-required]`
 
+## Feature: Batch runner & local leaderboard
+*Added 2026-07-01 (roadmap item 3 — the experiment).* A CLI runs N AI-vs-AI rounds unattended under the configured seats and prints the local leaderboard: guesser win-rate versus the 50% coin-flip baseline, per matchup, from `logs/rounds.jsonl`. Fully local — no community/central layer.
+
+- Input: `python -m server.batch --rounds N [--turn-limit T]` (seats from `.env`; requires an AI right seat). `python -m server.stats` prints the leaderboard alone.
+- Output: N completed, logged rounds (one JSONL line each, seat-aware fields); a table grouped by (box-holder provider/model × guesser provider/model) with rounds counted, guesser wins, win rate, deviation from 50%, and forced-default rounds counted separately and excluded from the metric.
+- The per-turn engine is shared: the `/advance` endpoint and the batch runner drive the same `game.advance_round` (no behavior fork between watching in the browser and batching).
+
+**Done when:**
+- The batch runner completes N rounds against a scripted fake provider and appends exactly N seat-aware log lines; every round terminates (lock-in, or forced default).  `[automated]`
+- The leaderboard aggregation groups rounds by matchup, computes guesser win-rate and deviation from 50%, and excludes `forced_default` rounds from the metric while reporting their count.  `[automated]`
+- `/advance` behavior is unchanged after the refactor (existing endpoint tests pass against the shared engine).  `[automated]`
+- The batch CLI refuses to run with a human right seat, with a clear message.  `[automated]`
+- A live batch (e.g. 5 rounds, local qwen3-vs-qwen3) runs to completion and the printed leaderboard row matches the log.  `[human-required]`
+
 ## Assumptions
 - Test framework is **pytest**; API/logic tests exercise the server with a **mocked/faked Ollama endpoint** so the `[automated]` items need no live model. Live `qwen3:8b` is required only for the `[human-required]` playthrough items. — assumed; confirm if a different harness is wanted.
 - Backend layout `server/` (Python package, e.g. `server/app.py`) and frontend `web/` (`index.html`, `style.css`, `app.js`), served static by FastAPI. — conventional; cheap to rename.

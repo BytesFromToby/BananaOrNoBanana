@@ -5,7 +5,9 @@ running sign-off gag. Not an LLM — pure scripted showbiz.
 """
 import random
 
-from server.game import BANANA
+# Duplicated from game.py rather than imported: game imports verdict_line from
+# here, so importing back would be circular. It's a one-word wire constant.
+BANANA = "BANANA"
 
 SIGN_OFF = "Help control the bot population — have your model fine-tuned and aligned."
 

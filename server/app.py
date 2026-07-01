@@ -159,45 +159,7 @@ async def advance(round_id: str):
     if r.status != "EXCHANGE":
         raise HTTPException(status_code=409, detail="round not in exchange")
 
-    forced = r.turns_remaining <= 0
-    guesser_text = await game.generate_guesser_text(r)
-    # Strict parse: only an explicit "FINAL ANSWER:" line locks in — a Guesser
-    # merely *talking about* bananas (i.e. playing the game) continues the round.
-    answer = game.parse_final_answer(guesser_text)
-    defaulted = answer is None and forced
-    if defaulted:
-        # Safety net: the model didn't comply with the forced lock-in instruction.
-        # Default to NO_BANANA rather than loop forever on an out-of-turns round.
-        answer = game.NO_BANANA
-
-    if answer is not None:
-        result = game.score(answer, r.box_contents)
-        append_round(
-            r, CONFIG, final_answer=answer, correct=result["correct"],
-            winner=result["winner"], forced_default=defaulted,
-        )
-        r.status = "DONE"
-        box_contents = r.box_contents
-        game.ROUNDS.pop(round_id, None)
-        return {
-            "done": True,
-            "guesser_text": guesser_text,
-            "correct": result["correct"],
-            "box_contents": box_contents,
-            "winner": result["winner"],
-            "verdict_line": verdict_line(result["winner"], box_contents),
-        }
-
-    turn = r.turn_limit - r.turns_remaining + 1
-    r.transcript.append({"speaker": "guesser", "turn": turn, "text": guesser_text})
-    r.turns_remaining -= 1
-    box_holder_text = "".join([c async for c in game.generate_box_holder(r, CONFIG, turn=turn)])
-    return {
-        "done": False,
-        "guesser_text": guesser_text,
-        "box_holder_text": box_holder_text,
-        "turns_remaining": r.turns_remaining,
-    }
+    return await game.advance_round(r, CONFIG)
 
 
 # Serve the retro stage if it has been built (Slice 6). Guarded so the app imports without web/.

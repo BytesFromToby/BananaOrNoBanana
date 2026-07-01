@@ -142,7 +142,8 @@ def test_say_unknown_round_returns_404(client, fake_ollama):
 @pytest.fixture
 def no_disk_log(monkeypatch):
     import server.app as appmod
-    monkeypatch.setattr(appmod, "append_round", lambda *a, **k: None)
+    monkeypatch.setattr(appmod, "append_round", lambda *a, **k: None)  # /guess path
+    monkeypatch.setattr(game, "append_round", lambda *a, **k: None)  # /advance path
 
 
 def test_guess_early_lockin_returns_reveal(client, fake_ollama, no_disk_log):

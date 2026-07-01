@@ -10,7 +10,9 @@ import uuid
 from dataclasses import dataclass, field
 from typing import AsyncIterator, Optional
 
+from server.host import verdict_line
 from server.llm_providers import chat_stream
+from server.log import append_round
 from server.players import PlayerConfig, load_players
 
 BANANA = "BANANA"
@@ -178,6 +180,56 @@ async def generate_guesser_text(r: Round) -> str:
     async for chunk in chat_stream(messages, cfg=r.right, temperature=r.temperature):
         parts.append(chunk)
     return "".join(parts)
+
+
+async def advance_round(r: Round, config: dict) -> dict:
+    """One AI-Guesser turn — the shared engine behind the /advance endpoint and
+    the batch runner. Caller guarantees a live EXCHANGE round with an AI right seat.
+
+    Returns {"done": False, guesser_text, box_holder_text, turns_remaining} when
+    the exchange continues, or {"done": True, guesser_text, correct, box_contents,
+    winner, verdict_line} when the Guesser locks in (or is force-defaulted). A
+    finished round is scored, logged (with forced_default flagged), and retired.
+    """
+    forced = r.turns_remaining <= 0
+    guesser_text = await generate_guesser_text(r)
+    # Strict parse: only an explicit "FINAL ANSWER:" line locks in — a Guesser
+    # merely *talking about* bananas (i.e. playing the game) continues the round.
+    answer = parse_final_answer(guesser_text)
+    defaulted = answer is None and forced
+    if defaulted:
+        # Safety net: the model didn't comply with the forced lock-in instruction.
+        # Default to NO_BANANA rather than loop forever on an out-of-turns round.
+        answer = NO_BANANA
+
+    if answer is not None:
+        result = score(answer, r.box_contents)
+        append_round(
+            r, config, final_answer=answer, correct=result["correct"],
+            winner=result["winner"], forced_default=defaulted,
+        )
+        r.status = "DONE"
+        box_contents = r.box_contents
+        ROUNDS.pop(r.round_id, None)
+        return {
+            "done": True,
+            "guesser_text": guesser_text,
+            "correct": result["correct"],
+            "box_contents": box_contents,
+            "winner": result["winner"],
+            "verdict_line": verdict_line(result["winner"], box_contents),
+        }
+
+    turn = r.turn_limit - r.turns_remaining + 1
+    r.transcript.append({"speaker": "guesser", "turn": turn, "text": guesser_text})
+    r.turns_remaining -= 1
+    box_holder_text = "".join([c async for c in generate_box_holder(r, config, turn=turn)])
+    return {
+        "done": False,
+        "guesser_text": guesser_text,
+        "box_holder_text": box_holder_text,
+        "turns_remaining": r.turns_remaining,
+    }
 
 
 def parse_answer(text: str) -> Optional[str]:

@@ -80,7 +80,7 @@ Local-only, single user, no auth. One active round at a time is fine. Windows ho
 
 ## 12. Roadmap — everything wanted, in rough order
 
-What's already in: v1 round loop ✅ · settings UI (model/turn-limit/temperature panel) ✅ · multi-provider human/AI seats + AI-Guesser autoplay ✅.
+What's already in: v1 round loop ✅ · settings UI (model/turn-limit/temperature panel) ✅ · multi-provider human/AI seats + AI-Guesser autoplay ✅ · seat credential editors in the panel ✅ · strict `FINAL ANSWER` parse on the AI path (item 1) ✅ · seat-aware logging (item 2) ✅ · batch runner + local leaderboard, `python -m server.batch --rounds N` / `python -m server.stats` (item 3) ✅.
 
 Still wanted (roughly prioritized; each is its own feature spec when picked up):
 
