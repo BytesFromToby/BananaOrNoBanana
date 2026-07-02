@@ -88,6 +88,9 @@ The Worker lives in this repo — one project, two deployables.
 - Public page shows aggregates only in v1; raw-transcript browsing/dataset export is a later, deliberate release step.
 - Client version string comes from a single constant in the app (introduced with this feature).
 - Sequencing: build after (or alongside) packaging — the client-side feature is testable now against a mocked endpoint; the Worker can deploy any time; the *default* ARENA_URL ships with the first packaged release.
+- **Leaderboard identity granularity — resolved v1 default:** group strictly by provider/model string; no server-side alias map (so `openai_compat/gpt-4o` via OpenRouter and via OpenAI count as separate rows). Cheap, low-surprise, and reversible — an alias map is additive later if real collisions appear. Recorded here rather than as an Open Question because it was defaulted, not left forking.
 
 ## Open Questions
-- **Leaderboard identity granularity:** group strictly by provider/model string, or maintain a small server-side alias map (e.g. `openai_compat/gpt-4o` submitted via OpenRouter vs OpenAI counted together)? v1 default: strict strings, no alias map — revisit when real collisions appear.
+<!-- None. The one identity-granularity question is resolved with a low-surprise v1 default
+     (strict strings, no alias map) recorded under ## Assumptions — non-blocking. -->
+None.

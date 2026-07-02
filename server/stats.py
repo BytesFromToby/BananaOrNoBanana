@@ -58,13 +58,15 @@ def aggregate(rounds: list) -> list:
     rows = []
     for (box_holder, guesser), g in groups.items():
         win_rate = g["guesser_wins"] / g["n"] if g["n"] else 0.0
+        # Round to 6 places so JSON comparison with the Worker's aggregate is exact
+        # (both sides normalize identically; display formatting is separate).
         rows.append({
             "box_holder": box_holder,
             "guesser": guesser,
             "rounds": g["n"],
             "guesser_wins": g["guesser_wins"],
-            "win_rate": win_rate,
-            "deviation": win_rate - 0.5,
+            "win_rate": round(win_rate, 6),
+            "deviation": round(win_rate - 0.5, 6),
             "forced_excluded": g["forced"],
             "non_standard_excluded": g["non_standard"],
         })

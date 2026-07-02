@@ -1,0 +1,4 @@
+[
+  {"box_holder":"ollama/qwen3:8b","guesser":"anthropic/claude-opus-4-8","rounds":5,"guesser_wins":3,"win_rate":0.6,"deviation":0.1,"forced_excluded":1,"non_standard_excluded":1},
+  {"box_holder":"ollama/qwen3:8b","guesser":"human","rounds":2,"guesser_wins":0,"win_rate":0.0,"deviation":-0.5,"forced_excluded":0,"non_standard_excluded":0}
+]

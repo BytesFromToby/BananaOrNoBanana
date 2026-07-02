@@ -41,6 +41,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Run N AI-vs-AI rounds and print the leaderboard.")
     parser.add_argument("--rounds", type=int, default=10, help="rounds to play (default 10)")
     parser.add_argument("--turn-limit", type=int, default=None, help="guesser turns per round")
+    parser.add_argument("--submit", action="store_true",
+                        help="opt-in: submit this run's rounds to the community arena when done")
     args = parser.parse_args(argv)
 
     config = load_config()
@@ -61,6 +63,13 @@ def main(argv=None):
     asyncio.run(run_batch(args.rounds, config, players, turn_limit=args.turn_limit))
     print()
     stats.main()
+
+    if args.submit:
+        # Opt-in only. Submits all not-yet-submitted rounds (this run's included).
+        from server import submit as submit_mod
+
+        print()
+        submit_mod.main([])
 
 
 if __name__ == "__main__":
