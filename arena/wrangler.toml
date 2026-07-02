@@ -11,7 +11,7 @@ compatibility_date = "2024-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "banana-arena"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "d3d017b2-5891-4fcc-8f11-1e6564bf5dfe"
 
 [vars]
 # Non-secret config. Per-client daily round cap; override without code change.
