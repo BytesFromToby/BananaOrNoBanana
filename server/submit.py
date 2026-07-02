@@ -11,7 +11,7 @@ import sys
 
 import httpx
 
-from server.arena import build_payload, get_or_create_client_id
+from server.arena import build_payload, get_or_create_client_id, is_submittable
 from server.stats import load_rounds
 
 DEFAULT_ARENA_URL = "https://banana-arena.example.workers.dev"
@@ -88,16 +88,23 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Submit completed rounds to the community arena.")
     parser.add_argument("--url", default=os.environ.get("ARENA_URL", DEFAULT_ARENA_URL))
     parser.add_argument("--rounds-path", default=_ROUNDS_PATH)
+    parser.add_argument("--submitted-path", default=_SUBMITTED_PATH)
     args = parser.parse_args(argv)
 
-    rounds = unsent_rounds(args.rounds_path)
+    unsent = unsent_rounds(args.rounds_path, args.submitted_path)
+    # Never send rounds the arena can't accept — legacy rounds missing seat-aware fields
+    # would just be re-rejected on every run. Skip them client-side.
+    rounds = [r for r in unsent if is_submittable(r)]
+    skipped = len(unsent) - len(rounds)
+    if skipped:
+        print(f"Skipping {skipped} legacy round(s) missing seat-aware fields (not submittable).")
     if not rounds:
-        print("Nothing to submit — all logged rounds are already in the arena.")
+        print("Nothing to submit — all submittable rounds are already in the arena.")
         return
     key = os.environ.get("ARENA_MAINTAINER_KEY") or None
     print(f"Submitting {len(rounds)} round(s) to {args.url} ...")
     try:
-        result = submit(rounds, args.url, maintainer_key=key)
+        result = submit(rounds, args.url, maintainer_key=key, submitted_path=args.submitted_path)
     except Exception as e:  # network / server error — nothing marked submitted
         sys.exit(f"Submission failed: {e}")
     print(

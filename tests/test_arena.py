@@ -24,6 +24,29 @@ def test_client_id_created_once_and_stable(tmp_path):
     assert other != a
 
 
+def _full_round(rid="good1", **over):
+    r = {
+        "round_id": rid, "ts": "2026-07-01T00:00:00Z", "mode": "ai_guesser_vs_ai_box_holder",
+        "box_holder_provider": "ollama", "box_holder_model": "qwen3:8b",
+        "guesser_provider": "ollama", "guesser_model": "qwen3:8b",
+        "box_contents": "BANANA", "turn_limit": 3, "temperature": 0.7, "standard_settings": True,
+        "transcript": [{"speaker": "box_holder", "turn": 0, "text": "hi"}],
+        "guesser_turns_used": 1, "final_answer": "BANANA", "correct": True, "winner": "guesser",
+        "forced_default": False,
+    }
+    r.update(over)
+    return r
+
+
+def test_is_submittable_requires_seat_aware_fields():
+    assert arena.is_submittable(_full_round()) is True
+    legacy = {"round_id": "old", "winner": "guesser"}  # pre-seat-aware log line
+    assert arena.is_submittable(legacy) is False
+    missing_temp = _full_round()
+    del missing_temp["temperature"]
+    assert arena.is_submittable(missing_temp) is False
+
+
 def test_build_payload_envelope_and_verbatim_rounds():
     rounds = [{"round_id": "x", "winner": "guesser", "transcript": [{"speaker": "box_holder"}]}]
     payload = arena.build_payload(rounds, client_id="cid123")
@@ -118,6 +141,29 @@ def test_maintainer_key_sent_as_header(tmp_path):
 def test_submit_empty_is_noop():
     result = submit.submit([], "https://arena.test", transport=lambda *a: 1 / 0)
     assert result == {"accepted": 0, "duplicates": [], "rejected": []}
+
+
+def test_main_skips_legacy_rounds(tmp_path, monkeypatch, capsys):
+    """The CLI must never send legacy rounds that can't validate — they'd be
+    re-rejected forever. Only submittable (seat-aware) rounds go out."""
+    rounds_path = tmp_path / "rounds.jsonl"
+    with open(rounds_path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(_full_round("good1")) + "\n")
+        f.write(json.dumps({"round_id": "legacy1", "winner": "guesser"}) + "\n")  # pre-seat-aware
+    submitted_path = tmp_path / "submitted.jsonl"
+
+    captured = {}
+
+    def fake_submit(rounds, url, maintainer_key=None, submitted_path=None, **kw):
+        captured["ids"] = [r["round_id"] for r in rounds]
+        return {"accepted": len(rounds), "accepted_ids": captured["ids"], "duplicates": [], "rejected": []}
+
+    monkeypatch.setattr(submit, "submit", fake_submit)
+    submit.main(["--url", "https://arena.test",
+                 "--rounds-path", str(rounds_path),
+                 "--submitted-path", str(submitted_path)])
+    assert captured["ids"] == ["good1"]  # legacy1 never sent
+    assert "Skipping 1 legacy" in capsys.readouterr().out
 
 
 def test_batch_no_submit_makes_no_network_call(monkeypatch):

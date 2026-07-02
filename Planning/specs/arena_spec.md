@@ -34,12 +34,14 @@ The app submits completed rounds to the arena only when explicitly asked. Nothin
 
 - Input: `python -m server.batch --rounds N --submit` (submit the batch's rounds when done); `python -m server.submit` (submit all not-yet-submitted rounds from `logs/rounds.jsonl`); `ARENA_URL` env override (default: the deployed Worker URL); `ARENA_MAINTAINER_KEY` env (optional, marks submissions verified).
 - Output: POST per the wire format; on success, submitted `round_id`s are recorded locally (`logs/submitted.jsonl`: `{round_id, submitted_at}` per line) and skipped by future submits. `client_id` is created on first submit and stored (`logs/arena_client_id`). Human-only and `ai_guesser` rounds are both eligible (mode is in the record; the leaderboard decides what to show).
+- Eligibility filter: only rounds carrying every wire-format-v1 field are sent. Rounds logged before seat-aware logging existed (missing `box_holder_provider`/`temperature`/`standard_settings`/…) are **not submittable** and are skipped client-side with a count, so they aren't sent and re-rejected on every run. (`server.arena.is_submittable` mirrors the Worker's required-field list.)
 - Errors: non-2xx responses are printed with the server's per-round error list; nothing is marked submitted on failure; partial acceptance (server accepted some, rejected dupes) marks only the accepted/duplicate rounds as submitted.
 
 **Done when:**
 - Running batch without `--submit`, or the server normally, performs no network call to the arena (verified: no request against a mocked transport).  `[automated]`
 - `server.submit` sends exactly the not-yet-submitted rounds in wire format v1 with a stable `client_id`, and marks them submitted only on acceptance (verified against a mocked arena endpoint, including a failure case).  `[automated]`
 - A second `server.submit` run sends nothing ("nothing to submit").  `[automated]`
+- Legacy rounds missing required wire-format fields are skipped client-side (never sent), with a reported count; only fully-formed rounds go out.  `[automated]`
 - A real submission from this machine to the deployed Worker lands in D1 and appears in the leaderboard JSON.  `[human-required]`
 
 ## Feature: Worker ingest (`POST /api/submit`)

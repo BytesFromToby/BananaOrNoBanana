@@ -13,6 +13,25 @@ CLIENT_VERSION = "0.1.0"  # single source of truth for the app version string
 
 _CLIENT_ID_PATH = os.path.join("logs", "arena_client_id")
 
+# The fields a round must carry to be a valid wire-format-v1 submission — mirrors the
+# Worker's REQUIRED_FIELDS (arena/src/lib/validate.js). Rounds logged before seat-aware
+# logging existed lack these; they are never submittable and must be filtered locally so
+# they aren't sent (and re-rejected) on every submit.
+REQUIRED_WIRE_FIELDS = (
+    "round_id", "ts", "mode",
+    "box_holder_provider", "box_holder_model",
+    "guesser_provider", "guesser_model",
+    "box_contents", "turn_limit", "temperature", "standard_settings",
+    "transcript", "guesser_turns_used", "final_answer", "correct", "winner",
+    "forced_default",
+)
+
+
+def is_submittable(round: dict) -> bool:
+    """True iff the round carries every wire-format-v1 field the arena requires.
+    Legacy rounds (pre-seat-aware logging) fail this and are skipped by the client."""
+    return all(field in round for field in REQUIRED_WIRE_FIELDS)
+
 
 def get_or_create_client_id(path: str = _CLIENT_ID_PATH) -> str:
     """Return this install's anonymous client_id, minting it once on first call."""
