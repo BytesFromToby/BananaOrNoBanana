@@ -3,6 +3,8 @@ import json
 import os
 from datetime import datetime, timezone
 
+from server.config import is_standard
+
 
 def _seat_identity(cfg):
     """(provider, model) for a seat; a human seat logs as ("human", "")."""
@@ -38,6 +40,8 @@ def append_round(r, config, final_answer, correct, winner, forced_default=False,
         "guesser_model": guesser_model,
         "box_contents": r.box_contents,
         "turn_limit": r.turn_limit,
+        "temperature": r.temperature,
+        "standard_settings": is_standard(r.turn_limit, r.temperature),
         "transcript": r.transcript,
         "guesser_turns_used": r.turn_limit - r.turns_remaining,
         "final_answer": final_answer,

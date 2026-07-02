@@ -92,6 +92,8 @@ A self-contained vanilla HTML/CSS/JS page served by the server is the playable s
 ## Feature: Match settings
 A settings panel lets the player choose, before starting a round, which installed Ollama model plays the Box Holder, the guesser turn limit, and the temperature. The chosen values govern that round; omitted values fall back to the `config.json` defaults.
 
+*Amended 2026-07-01 — standard leaderboard conditions.* Turn limit and temperature are pinned to the published standard (**3 turns, temperature 0.7** — `STANDARD_SETTINGS` in `server/config.py`; the `config.json` defaults equal it) and locked in the UI behind a **"Bypass leaderboard settings"** checkbox. Bypassed rounds play and log normally but are flagged non-standard and never count toward any leaderboard — mixed conditions (a hot Box Holder vs a cold one) would confound the deviation-from-50% metric. Unchecking the bypass snaps the controls back to standard.
+
 - Input: `GET /api/models` (no body); `POST /api/round` optional body `{model?, turn_limit?, temperature?}`.
 - Output: `GET /api/models` → `{models: [name, …], default: <configured model>}` (installed models from Ollama); a round created with overrides runs under them.
 
@@ -101,6 +103,8 @@ A settings panel lets the player choose, before starting a round, which installe
 - `POST /api/round` with an omitted field falls back to the `config.json` default for that field.  `[automated]`
 - `POST /api/round` with an invalid setting (`turn_limit` < 1, or a non-numeric/negative `temperature`) returns `422` and creates no round.  `[automated]`
 - The settings panel lists the installed models in a dropdown alongside turn-limit and temperature controls, and the chosen values visibly drive the next round.  `[human-required]`
+- *(Amended 2026-07-01.)* With the bypass unchecked, the turn/temperature controls are disabled and pinned at 3 / 0.7 and rounds are created at exactly those values; checking the bypass enables them and its note states the rounds won't count.  `[human-required]`
+- *(Amended 2026-07-01.)* Rounds log `temperature` and a `standard_settings` flag that is true iff turn_limit == 3 and temperature == 0.7; `server/stats.py` excludes non-standard rounds from the metric and reports their count.  `[automated]`
 
 ## Feature: Configurable multi-provider player seats (Left/Right)
 *Added 2026-07-01.* Either seat — **LeftPlayer** (the Box Holder) or **RightPlayer** (the Guesser) — is independently configured as **human** or **AI**, and any AI seat can be driven by **Ollama**, an **OpenAI-compatible** endpoint (OpenAI itself, OpenRouter, vLLM, LM Studio, ...), or **Anthropic**. Configuration lives in environment variables (`.env`, gitignored; `.env.example` committed as the template) and — *amended later on 2026-07-01, superseding "never editable from the browser"* — is also editable from the settings panel: two seat editors (credential slots) covering all three provider types. API keys are **write-only** across the browser boundary: accepted from the settings panel (localhost, single user), persisted server-side to `.env`, and never sent back to the browser in any response.

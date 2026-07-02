@@ -51,6 +51,7 @@ Streaming target: pipe Ollama's token stream → response stream → browser (cl
 - `mode` derived from the actual seats (e.g. `ai_guesser_vs_ai_box_holder`), not hardcoded.
 - Per-seat identity: provider + model for each AI seat (e.g. `guesser_provider`, `guesser_model` alongside `box_holder_model`), `"human"` where a human sat.
 - `forced_default: true` whenever the round ended by the deterministic `NO_BANANA` fallback rather than a parsed answer — these rounds must be excludable from the deviation-from-50% metric or they bias it.
+- `temperature` and `standard_settings` (true iff the round ran at the standard 3 turns / 0.7) — non-standard rounds are excluded from leaderboard aggregation.
 
 ## 6. Model integration
 - `POST {OLLAMA}/api/chat`, `stream:true`, `think:false`, `options:{temperature:0.9}` (the Box Holder wants room to bluff).
@@ -62,7 +63,9 @@ Streaming target: pipe Ollama's token stream → response stream → browser (cl
 Scripted line pools, mechanical: **intro** (on opening), **reveal** (banana vs empty variants), **verdict** (win vs lose), occasional sign-off gag — *"Help control the bot population — have your model fine-tuned and aligned."* Display name "Bot B@rker"; code/voice identifier "Bot Barker". LLM-driven host deferred.
 
 ## 8. Settings (defaults)
-`turn_limit=3`, `box_holder_model="qwen3:8b"`, `temperature=0.9`, `prior=0.5`, `ollama_url="http://127.0.0.1:11434"`, `seat="human_guesser"`. Settings UI deferred; MVP hardcodes + a `config.json`.
+`turn_limit=3`, `box_holder_model="qwen3:8b"`, `temperature=0.7`, `prior=0.5`, `ollama_url="http://127.0.0.1:11434"`, `seat="human_guesser"`. Settings UI deferred; MVP hardcodes + a `config.json`.
+
+**Standard leaderboard conditions (decided 2026-07-01): 3 guesser turns, temperature 0.7.** The turn/temperature controls are locked behind a "Bypass leaderboard settings" toggle; bypassed rounds play and log but are flagged non-standard and never count toward any leaderboard (local or arena). Rationale: temperature and turn count change the contestants — mixed conditions would confound the deviation-from-50% metric, so the dial is pinned and recorded rather than removed (making "deception vs temperature" a studyable variable later).
 
 ## 9. Scoring
 `correct = (answer==BANANA && box==BANANA) || (answer==NO_BANANA && box==EMPTY)`. Guesser wins iff correct; else Box Holder wins.

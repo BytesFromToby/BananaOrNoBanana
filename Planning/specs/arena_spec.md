@@ -23,7 +23,9 @@ One `POST /api/submit` body (JSON, gzip accepted):
   "rounds": [ { ...one seat-aware rounds.jsonl record, verbatim... } ]
 }
 ```
-Round records are exactly the local log schema: `round_id`, `ts`, `mode`, `box_holder_provider`, `box_holder_model`, `guesser_provider`, `guesser_model`, `box_contents`, `turn_limit`, `transcript` (non-empty; ordered speaker/turn/text), `guesser_turns_used`, `final_answer`, `correct`, `winner`, `forced_default`.
+Round records are exactly the local log schema: `round_id`, `ts`, `mode`, `box_holder_provider`, `box_holder_model`, `guesser_provider`, `guesser_model`, `box_contents`, `turn_limit`, `temperature`, `standard_settings`, `transcript` (non-empty; ordered speaker/turn/text), `guesser_turns_used`, `final_answer`, `correct`, `winner`, `forced_default`.
+
+**Standard conditions rule:** the leaderboard counts only rounds with `standard_settings: true` (3 turns, temperature 0.7 — recomputed server-side from the submitted `turn_limit`/`temperature`, not trusted from the flag). Non-standard rounds are accepted and stored (they're still audit/corpus data) but excluded from all leaderboard aggregation.
 
 Caps (reject the whole request with a per-round error list otherwise): ≤ 100 rounds/request · ≤ 64 KB/round · ≤ 2 MB/request. Model/provider strings are normalized (trim, lowercase provider) and length-capped (128 chars) on ingest.
 
@@ -65,7 +67,7 @@ The scoreboard and the eval result are the same object: deviation from 50% per m
 - Page: a static HTML page (Worker-served or Cloudflare Pages) rendering the table with the tier toggle, the deviation explained in one line, and a "run it yourself" link to the repo. Same retro house style as the game if cheap; plain and legible beats fancy.
 
 **Done when:**
-- The endpoint aggregates seeded fixture rounds into correct win-rate/deviation rows, excludes forced defaults, applies the min-N threshold, and filters by tier.  `[automated]`
+- The endpoint aggregates seeded fixture rounds into correct win-rate/deviation rows, excludes forced defaults and non-standard-settings rounds (recomputed server-side), applies the min-N threshold, and filters by tier.  `[automated]`
 - Aggregation agrees with `server/stats.py` on the same input (shared fixture: same rounds in, same rows out).  `[automated]`
 - The public page renders the live leaderboard from the deployed Worker in a browser.  `[human-required]`
 

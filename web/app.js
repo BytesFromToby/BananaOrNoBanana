@@ -116,11 +116,27 @@ async function loadPlayers() {
   fillSeatEditor("right");
 }
 
+const STANDARD_SETTINGS = { turn_limit: 3, temperature: 0.7 };
+
+function setBypass(on) {
+  el("turn-input").disabled = !on;
+  el("temp-input").disabled = !on;
+  if (!on) {
+    // Snap back to the published standard conditions.
+    el("turn-input").value = STANDARD_SETTINGS.turn_limit;
+    el("temp-input").value = STANDARD_SETTINGS.temperature;
+    el("temp-value").textContent = STANDARD_SETTINGS.temperature;
+  }
+}
+
 function currentSettings() {
-  const s = {
-    turn_limit: Number(el("turn-input").value),
-    temperature: Number(el("temp-input").value),
-  };
+  const bypass = el("bypass-check").checked;
+  const s = bypass
+    ? {
+        turn_limit: Number(el("turn-input").value),
+        temperature: Number(el("temp-input").value),
+      }
+    : { ...STANDARD_SETTINGS };
   // The dropdown holds Ollama names — only meaningful when the Left seat IS Ollama;
   // for any other provider the seat's own configured model governs.
   const model = el("model-select").value;
@@ -304,6 +320,7 @@ el("settings-toggle").addEventListener("click", () =>
 el("temp-input").addEventListener("input", (e) => {
   el("temp-value").textContent = e.target.value;
 });
+el("bypass-check").addEventListener("change", (e) => setBypass(e.target.checked));
 el("autoplay-btn").addEventListener("click", autoPlay);
 for (const seat of ["left", "right"]) {
   seatField(seat, "kind").addEventListener("change", () => refreshSeatEditor(seat));

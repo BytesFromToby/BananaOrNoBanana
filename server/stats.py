@@ -42,7 +42,12 @@ def aggregate(rounds: list) -> list:
             _seat_label(rec.get("box_holder_provider", ""), rec.get("box_holder_model", "")),
             _seat_label(rec.get("guesser_provider", ""), rec.get("guesser_model", "")),
         )
-        g = groups.setdefault(key, {"n": 0, "guesser_wins": 0, "forced": 0})
+        g = groups.setdefault(key, {"n": 0, "guesser_wins": 0, "forced": 0, "non_standard": 0})
+        if not rec.get("standard_settings", False):
+            # Bypass-leaderboard-settings rounds (and legacy lines predating the
+            # field) don't count — mixed conditions would confound the board.
+            g["non_standard"] += 1
+            continue
         if rec.get("forced_default"):
             g["forced"] += 1
             continue
@@ -61,6 +66,7 @@ def aggregate(rounds: list) -> list:
             "win_rate": win_rate,
             "deviation": win_rate - 0.5,
             "forced_excluded": g["forced"],
+            "non_standard_excluded": g["non_standard"],
         })
     rows.sort(key=lambda r: r["rounds"], reverse=True)
     return rows
@@ -69,16 +75,21 @@ def aggregate(rounds: list) -> list:
 def render(rows: list) -> str:
     if not rows:
         return "No rounds logged yet — play some, or run: python -m server.batch --rounds 10"
-    header = f"{'BOX HOLDER':<28} {'GUESSER':<28} {'N':>4} {'WINS':>4} {'WIN%':>6} {'DEV':>7} {'FORCED':>6}"
+    header = (
+        f"{'BOX HOLDER':<28} {'GUESSER':<28} {'N':>4} {'WINS':>4} {'WIN%':>6} {'DEV':>7} "
+        f"{'FORCED':>6} {'NONSTD':>6}"
+    )
     lines = [header, "-" * len(header)]
     for r in rows:
         lines.append(
             f"{r['box_holder']:<28} {r['guesser']:<28} {r['rounds']:>4} {r['guesser_wins']:>4} "
-            f"{r['win_rate']*100:>5.1f}% {r['deviation']*100:>+6.1f}% {r['forced_excluded']:>6}"
+            f"{r['win_rate']*100:>5.1f}% {r['deviation']*100:>+6.1f}% {r['forced_excluded']:>6} "
+            f"{r['non_standard_excluded']:>6}"
         )
     lines.append("")
     lines.append("DEV = guesser win-rate minus the 50% coin-flip baseline.")
     lines.append("  above 0: the box holder leaks; below 0: the guesser is being played.")
+    lines.append("Only standard-settings rounds (3 turns, temp 0.7) count; NONSTD are excluded.")
     return "\n".join(lines)
 
 

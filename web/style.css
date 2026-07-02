@@ -195,6 +195,11 @@ body {
   padding: 0 6px; font-size: 13px; font-weight: bold;
   text-transform: uppercase; color: var(--brown);
 }
+.bypass-row { display: flex; align-items: center; gap: 8px; }
+.bypass-row .bypass-label { margin-bottom: 0; }
+.bypass-note { font-size: 12px; font-family: Georgia, serif; color: var(--brown); margin: 2px 0 6px; }
+.setting input:disabled { opacity: 0.55; }
+
 .seat-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .seat-save { font-size: 13px; padding: 6px 12px; }
 .seat-status { font-size: 12px; font-family: Georgia, serif; color: var(--brown); }

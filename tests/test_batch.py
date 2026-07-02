@@ -111,6 +111,7 @@ def _rec(winner, forced=False, bh=("ollama", "qwen3:8b"), g=("anthropic", "claud
         "box_holder_provider": bh[0], "box_holder_model": bh[1],
         "guesser_provider": g[0], "guesser_model": g[1],
         "winner": winner, "forced_default": forced,
+        "standard_settings": True,
     }
 
 
@@ -133,10 +134,13 @@ def test_aggregate_groups_and_computes_deviation():
 
 
 def test_aggregate_handles_legacy_lines_without_seat_fields():
+    # Legacy lines predate both the seat fields and standard_settings: they
+    # group under 'unknown' and are excluded from the metric as non-standard.
     rows = aggregate([{"winner": "guesser"}])
     assert rows[0]["box_holder"] == "unknown"
     assert rows[0]["guesser"] == "unknown"
-    assert rows[0]["rounds"] == 1
+    assert rows[0]["rounds"] == 0
+    assert rows[0]["non_standard_excluded"] == 1
 
 
 def test_render_contains_matchup_and_deviation():
@@ -148,3 +152,13 @@ def test_render_contains_matchup_and_deviation():
 
 def test_render_empty_log():
     assert "No rounds logged yet" in render(aggregate([]))
+
+
+def test_aggregate_excludes_non_standard_rounds():
+    """Bypass-leaderboard-settings rounds play and log but never count."""
+    std = _rec("guesser")
+    hot = {**_rec("guesser"), "standard_settings": False}
+    legacy = {k: v for k, v in _rec("guesser").items() if k != "standard_settings"}
+    rows = aggregate([std, std, hot, legacy])
+    assert rows[0]["rounds"] == 2
+    assert rows[0]["non_standard_excluded"] == 2

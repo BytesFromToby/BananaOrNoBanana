@@ -94,3 +94,19 @@ def test_transcript_order_and_turns_preserved(tmp_path):
     assert [(e["speaker"], e["turn"]) for e in obj["transcript"]] == [
         ("box_holder", 0), ("guesser", 1), ("box_holder", 1), ("guesser", 2), ("box_holder", 2)
     ]
+
+
+def test_temperature_and_standard_flag_logged(tmp_path):
+    """Rounds record the conditions they ran under; bypass rounds are marked."""
+    path = str(tmp_path / "rounds.jsonl")
+    std = _round()  # turn_limit 3; Round default temperature 0.7? set explicitly
+    std.temperature = 0.7
+    append_round(std, dict(DEFAULTS), "NO_BANANA", True, "guesser", path=path)
+    hot = _round()
+    hot.temperature = 1.2
+    append_round(hot, dict(DEFAULTS), "NO_BANANA", True, "guesser", path=path)
+    lines = [json.loads(l) for l in open(path, encoding="utf-8").read().splitlines()]
+    assert lines[0]["temperature"] == 0.7
+    assert lines[0]["standard_settings"] is True
+    assert lines[1]["temperature"] == 1.2
+    assert lines[1]["standard_settings"] is False
