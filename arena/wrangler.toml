@@ -18,6 +18,8 @@ database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
 DAILY_ROUND_CAP = "500"
 MIN_ROUNDS = "10"
 
-# Static assets (the public leaderboard page).
+# Static assets (the public leaderboard page). `binding` lets the Worker fall back to
+# env.ASSETS.fetch() for non-API routes; assets are matched before the Worker runs.
 [assets]
 directory = "public"
+binding = "ASSETS"
