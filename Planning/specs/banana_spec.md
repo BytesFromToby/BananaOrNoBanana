@@ -106,8 +106,42 @@ A settings panel lets the player choose, before starting a round, which installe
 - *(Amended 2026-07-01.)* With the bypass unchecked, the turn/temperature controls are disabled and pinned at 3 / 0.7 and rounds are created at exactly those values; checking the bypass enables them and its note states the rounds won't count.  `[human-required]`
 - *(Amended 2026-07-01.)* Rounds log `temperature` and a `standard_settings` flag that is true iff turn_limit == 3 and temperature == 0.7; `server/stats.py` excludes non-standard rounds from the metric and reports their count.  `[automated]`
 
+## Feature: Red/Blue players & role rotation
+*Added 2026-07-02. Supersedes the fixed Left=Box-Holder / Right=Guesser mapping below, and builds the previously-deferred human Box Holder (old roadmap item 6).* The two players are persistent color identities — **RedPlayer** (was LeftPlayer) and **BluePlayer** (was RightPlayer) — and the **role** (Box Holder vs Guesser) is assigned per game rather than welded to the color. Red renders red in the UI, Blue renders blue. Provider/model/human-or-AI config for each color is unchanged from the seat feature below (env + settings-panel editors), only renamed `RED_PLAYER_*` / `BLUE_PLAYER_*`.
+
+Role-assignment policy:
+- **AI vs AI:** the Box Holder/Guesser roles **alternate every completed game**. This cancels role-assignment bias so a Red-vs-Blue matchup measures both directions (Red-holds-Blue-guesses *and* Blue-holds-Red-guesses). Rotation state is in-memory (resets on restart), advanced once per completed+logged round.
+- **One human present:** the human **chooses** their role (Guesser or Box Holder) — no auto-rotation; the choice governs until changed. The AI takes the other role.
+- Human vs human (party) stays deferred (needs turn-passing UX).
+
+Human Box Holder mode (new interaction, when the human chooses to hold):
+- The server flips the coin and reveals the contents **to the human holder only** (they are the Box Holder — allowed to know). The Guesser-facing no-leak invariant still holds: no *Guesser*-facing response carries `box_contents`.
+- The human types the opening + replies (bluffing) via `POST /api/round/{id}/hold` `{text}`; each call feeds the human's line to the AI Guesser and returns the Guesser's response — either a continuation or a `FINAL ANSWER` lock-in ending the round. Mirrors `/advance` with the roles reversed. `prompts/box_holder.md` is not used (the human bluffs themselves); the AI Guesser uses `prompts/guesser.md`.
+- Scoring is unchanged: the Guesser wins iff correct, so the human-as-holder wins when the AI Guesser calls it wrong.
+
+- Input: `RED_PLAYER_*` / `BLUE_PLAYER_*` env vars and `PUT /api/players/{red|blue}` (same shape as before). Human role choice via config/settings (`HUMAN_ROLE`=guesser|holder, default guesser) applied when a human is present. `POST /api/round/{id}/hold {text}` for the human-holder path.
+- Output: `GET /api/players` → `{"red": {...}, "blue": {...}}` (never `api_key`), plus the round's assigned `holder`/`guesser` colors. Round state carries `holder_color` and `guesser_color`; the log records both colors alongside the existing per-role provider/model (so leaderboard aggregation, which already groups by box_holder×guesser role+model, captures rotation with no change).
+- The per-round `model` override (Match settings) is **deprecated** — with rotation, "the box holder's model" is ambiguous; each color's model comes from its own config. `turn_limit`/`temperature` (standard-settings) are unchanged.
+
+**Done when:**
+- With both players AI, consecutive rounds alternate which color is Box Holder vs Guesser; the log's `box_holder_*`/`guesser_*` fields swap accordingly.  `[automated]`
+- A round records `holder_color` and `guesser_color`, and `GET /api/players` returns both colors' `kind`/`provider`/`model` and never `api_key`.  `[automated]`
+- When the human chooses Guesser, play is the existing human-Guesser flow (`/say` + `/guess`); when the human chooses Box Holder, `/say` is rejected and `POST /api/round/{id}/hold` drives an AI-Guesser round to a reveal.  `[automated]`
+- A human-holder round reveals `box_contents` to the holder path but never in any Guesser-facing response or streamed Guesser content.  `[automated]`
+- Scoring holds for the human-holder case: the AI Guesser locking in wrong makes the human (holder) the winner.  `[automated]`
+- Env `RED_PLAYER_*` / `BLUE_PLAYER_*` load the two colors; a migration keeps an existing `.env` working (or is migrated in place).  `[automated]`
+- The stage renders Red as red and Blue as blue, shows who is holding vs guessing each game, and — when the human is the Box Holder — presents the secret + a bluff-input control instead of the question/lock-in controls.  `[human-required]`
+- Over an AI-vs-AI batch of an even number of rounds between two distinct models, each model holds and guesses an equal number of times.  `[automated]`
+
+## Assumptions (Red/Blue rotation)
+- Hard rename `LEFT_PLAYER_*`→`RED_PLAYER_*`, `RIGHT_PLAYER_*`→`BLUE_PLAYER_*`; the local `.env` is migrated in place (single local user; no long back-compat window). — assumed.
+- Rotation starts with Red as Box Holder in game 1, then alternates. — arbitrary, low-surprise.
+- Rotation state is in-memory and per-process (resets on restart); acceptable since rounds are already ephemeral and one-at-a-time. — from §10.
+- Human role choice is a single setting (`HUMAN_ROLE`, default `guesser`); human-vs-human alternation is out of scope. — proportional.
+- The per-round `model` override is retired rather than reinterpreted. — reduces ambiguity under rotation.
+
 ## Feature: Configurable multi-provider player seats (Left/Right)
-*Added 2026-07-01.* Either seat — **LeftPlayer** (the Box Holder) or **RightPlayer** (the Guesser) — is independently configured as **human** or **AI**, and any AI seat can be driven by **Ollama**, an **OpenAI-compatible** endpoint (OpenAI itself, OpenRouter, vLLM, LM Studio, ...), or **Anthropic**. Configuration lives in environment variables (`.env`, gitignored; `.env.example` committed as the template) and — *amended later on 2026-07-01, superseding "never editable from the browser"* — is also editable from the settings panel: two seat editors (credential slots) covering all three provider types. API keys are **write-only** across the browser boundary: accepted from the settings panel (localhost, single user), persisted server-side to `.env`, and never sent back to the browser in any response.
+*Added 2026-07-01. **Player naming and the fixed role mapping are superseded by "Red/Blue players & role rotation" above (2026-07-02); the provider/human-or-AI/credential-editor mechanics below still hold, renamed Red/Blue.***  Either seat — **LeftPlayer** (the Box Holder) or **RightPlayer** (the Guesser) — is independently configured as **human** or **AI**, and any AI seat can be driven by **Ollama**, an **OpenAI-compatible** endpoint (OpenAI itself, OpenRouter, vLLM, LM Studio, ...), or **Anthropic**. Configuration lives in environment variables (`.env`, gitignored; `.env.example` committed as the template) and — *amended later on 2026-07-01, superseding "never editable from the browser"* — is also editable from the settings panel: two seat editors (credential slots) covering all three provider types. API keys are **write-only** across the browser boundary: accepted from the settings panel (localhost, single user), persisted server-side to `.env`, and never sent back to the browser in any response.
 
 - Input: `LEFT_PLAYER_*` / `RIGHT_PLAYER_*` env vars (`TYPE`=human|ai, `PROVIDER`=ollama|openai_compat|anthropic, `MODEL`, `BASE_URL`, `API_KEY`); and `PUT /api/players/{left|right}` body `{kind?, provider?, model?, base_url?, api_key?}` (an omitted `api_key` keeps the saved key; `""` clears it).
 - Output: `GET /api/players` → `{"left": {kind, provider, model}, "right": {kind, provider, model}}` — never `api_key`. When RightPlayer is AI, `POST /api/round/{id}/advance` drives one AI-Guesser turn per call (non-streamed): generates the Guesser's line via its configured provider, and either ends the round (line parses as `FINAL ANSWER: ...`) or continues (line + a Box Holder reply, transcript updated, turn spent). Turns are force-answered once exhausted, with a deterministic default (`NO_BANANA`) if the model still won't comply, so a round always terminates.
@@ -118,7 +152,7 @@ A settings panel lets the player choose, before starting a round, which installe
 - `GET /api/players` returns `kind`/`provider`/`model`/`base_url`/`has_key` for both seats and never includes `api_key`, for any configured provider.  `[automated]`
 - *(Amended 2026-07-01, seat editors.)* `PUT /api/players/{seat}` validates and applies a seat update (422 on invalid kind/provider/missing AI model/missing openai_compat base_url; 404 on an unknown seat), persists it to `.env` in place (other lines preserved), and never echoes the key; an omitted `api_key` keeps the saved key.  `[automated]`
 - *(Amended 2026-07-01.)* A round created with no per-round model override uses the left seat's configured model; the `config.json` `box_holder_model` default applies only when the seat has no model of its own; an explicit override still wins.  `[automated]`
-- *(Amended 2026-07-01.)* `POST /api/round` with a human left seat returns 422 with a clear message (a human Box Holder is roadmap item 6, not yet playable).  `[automated]`
+- *(Amended 2026-07-01; superseded 2026-07-02.)* ~~`POST /api/round` with a human left seat returns 422 (human Box Holder not yet playable).~~ Superseded by the Red/Blue feature, which builds the human Box Holder — a human may now hold the box (via `HUMAN_ROLE=holder` + `/hold`).  `[automated]`
 - *(Amended 2026-07-01.)* The settings panel shows two seat editors (Box Holder / Guesser), each with Player (human/AI), provider (Ollama local / Anthropic / OpenAI-compatible), model, base URL, and a password-type API-key field whose placeholder indicates when a key is already saved; saving updates the seat summary and the next round.  `[human-required]`
 - `POST /api/round/{id}/say` returns `409` when the round's right seat is AI-controlled.  `[automated]`
 - `POST /api/round/{id}/advance` on a non-AI right seat, or an unknown round, returns `409`/`404` respectively.  `[automated]`
