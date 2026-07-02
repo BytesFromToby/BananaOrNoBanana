@@ -13,13 +13,20 @@ const DEFAULT_MIN_ROUNDS = 10;
 export async function handleRequest(request, env, store, now = new Date()) {
   const url = new URL(request.url);
 
-  if (request.method === "POST" && url.pathname === "/api/submit") {
-    return await handleSubmit(request, env, store, now);
+  try {
+    if (request.method === "POST" && url.pathname === "/api/submit") {
+      return await handleSubmit(request, env, store, now);
+    }
+    if (request.method === "GET" && url.pathname === "/api/leaderboard") {
+      return await handleLeaderboard(url, env, store);
+    }
+    return json({ error: "not found" }, 404);
+  } catch (err) {
+    // Don't leak a raw stack, but surface enough to diagnose (e.g. a missing D1
+    // table reads as "no such table: rounds" instead of an opaque 1101 crash).
+    console.error("arena handler error:", err && err.stack ? err.stack : err);
+    return json({ error: "internal error", detail: String(err && err.message || err) }, 500);
   }
-  if (request.method === "GET" && url.pathname === "/api/leaderboard") {
-    return await handleLeaderboard(url, env, store);
-  }
-  return json({ error: "not found" }, 404);
 }
 
 async function handleSubmit(request, env, store, now) {
