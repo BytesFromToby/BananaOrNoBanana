@@ -5,7 +5,7 @@ Worker tests (separate toolchain): `npm test` from `arena/` (vitest).
 
 Built inline (main session) — see docs/decisions/arena_2026-07-01.md. Slice inspection self-assessed.
 
-- [ ] **Fully inspected**
+- [x] **Fully inspected** — ✅ Inspector (self-assessed): PASS — 2026-07-01 21:39 — see output/inspect/Inspect_arena_Final_2026-07-01_21-39.md (needs-human: 3)
 
 ---
 
@@ -18,7 +18,7 @@ Built inline (main session) — see docs/decisions/arena_2026-07-01.md. Slice in
   - **Test:** `python -m pytest -q tests/test_arena.py`
   - **Done When:** client_id is created once and stable across calls; payload has the four envelope fields and rounds verbatim.
   - **Stuck If:** the log schema and wire format can't be reconciled without reshaping round records.
-- [ ] Complete
+- [x] Complete
 
 ## Slice 2 — Client submission module & CLI (Python)
 **Scope:** `python -m server.submit` sends not-yet-submitted rounds; `--submit` on batch does the same after a run; nothing is sent without opting in.
@@ -27,7 +27,7 @@ Built inline (main session) — see docs/decisions/arena_2026-07-01.md. Slice in
   - **Test:** `python -m pytest -q tests/test_arena.py`
   - **Done When:** no network call without `--submit`/submit; exactly unsent rounds sent; accepted marked, failures not; second run sends nothing.
   - **Stuck If:** batch can't expose its just-played round_ids to the submitter.
-- [ ] Complete
+- [x] Complete
 
 ## Slice 3 — Shared aggregation parity (Python reference)
 **Scope:** a canonical aggregation used by both the leaderboard test fixture and `server/stats.py`, so Python and the Worker can be proven to agree.
@@ -36,7 +36,7 @@ Built inline (main session) — see docs/decisions/arena_2026-07-01.md. Slice in
   - **Test:** `python -m pytest -q tests/test_arena.py`
   - **Done When:** stats.aggregate(fixture) == golden rows (the same fixture the Worker test consumes).
   - **Stuck If:** stats.py can't consume the fixture shape without change.
-- [ ] Complete
+- [x] Complete
 
 ## Slice 4 — Worker project skeleton & pure logic (JS)  [inspect]
 `[inspect]`: new cross-module program + the security-relevant validation/rescore logic.
@@ -47,7 +47,7 @@ Built inline (main session) — see docs/decisions/arena_2026-07-01.md. Slice in
   - **Test:** `npm test` (from `arena/`)
   - **Done When:** validate rejects each crafted bad round with a field reason + over-cap whole; rescore rejects winner/standard mismatches; aggregate(fixture) equals the Python golden.
   - **Stuck If:** vitest can't run without live Cloudflare bindings (mitigate: pure modules, fake storage).
-- [ ] Complete
+- [x] Complete
 
 ## Slice 5 — Worker HTTP surface: ingest + leaderboard (JS)  [inspect]
 `[inspect]`: schema writes (D1), auth tier (maintainer key), rate-limit/dedupe.
@@ -58,7 +58,7 @@ Built inline (main session) — see docs/decisions/arena_2026-07-01.md. Slice in
   - **Test:** `npm test`
   - **Done When:** valid submit stores + counts; resubmit → all duplicates, nothing double-stored; bad rounds rejected with reasons; no-key=community/key=verified/banned=rejected; daily cap rejects N+1; leaderboard filters tier + min-N.
   - **Stuck If:** a fake store can't stand in for D1's query surface.
-- [ ] Complete
+- [x] Complete
 
 ## Slice 6 — Public page, no-secrets guard, deploy docs (JS + repo)
 **Scope:** a static leaderboard page, a committed test that no secret is present, and a deploy README.
@@ -67,7 +67,7 @@ Built inline (main session) — see docs/decisions/arena_2026-07-01.md. Slice in
   - **Test:** `npm test` + manual page (human-required)
   - **Done When:** no-secrets test passes; page renders from a stubbed leaderboard response; README deploy steps complete.
   - **Stuck If:** —
-- [ ] Complete
+- [x] Complete
 
 ---
 
