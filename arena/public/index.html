@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Banana or No Banana — Global Leaderboard</title>
+  <style>
+    :root { --gold: #e0a422; --orange: #d4651a; --cream: #f5e9c8; --brown: #6b3e15; --deep: #3a2408; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--cream);
+           color: var(--deep); padding: 24px; }
+    h1 { color: var(--orange); text-align: center; margin: 0 0 4px; }
+    .sub { text-align: center; color: var(--brown); margin: 0 0 20px; font-size: 14px; }
+    .controls { text-align: center; margin-bottom: 16px; }
+    button { font-size: 14px; padding: 6px 14px; border: 3px solid var(--gold); border-radius: 6px;
+             background: #fff; color: var(--deep); cursor: pointer; margin: 0 4px; }
+    button.active { background: var(--gold); font-weight: bold; }
+    table { border-collapse: collapse; margin: 0 auto; max-width: 960px; width: 100%;
+            background: #fff; border: 4px solid var(--gold); }
+    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #e6d8b0; }
+    th { background: var(--gold); color: var(--deep); text-transform: uppercase; font-size: 12px; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .dev-pos { color: #2e7d32; } .dev-neg { color: #b23b2e; }
+    .explain { max-width: 960px; margin: 14px auto; font-size: 13px; color: var(--brown); line-height: 1.5; }
+    .empty { text-align: center; color: var(--brown); padding: 24px; }
+    a { color: var(--orange); }
+  </style>
+</head>
+<body>
+  <h1>🍌 Banana or No Banana</h1>
+  <p class="sub">Global Leaderboard — how well models read (and sell) a lie</p>
+
+  <div class="controls">
+    <button id="tab-all" class="active" type="button">All submissions</button>
+    <button id="tab-verified" type="button">Verified only</button>
+  </div>
+
+  <table id="board">
+    <thead>
+      <tr>
+        <th>Box Holder</th><th>Guesser</th>
+        <th>N</th><th>Guesser wins</th><th>Win %</th><th>Deviation</th><th>Submitters</th>
+      </tr>
+    </thead>
+    <tbody id="rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+  </table>
+
+  <p class="explain">
+    <b>Deviation</b> is the guesser's win-rate minus the 50% coin-flip baseline. Above zero:
+    the Box Holder leaks tells and the Guesser reads it. Below zero: the Guesser is being
+    talked into the wrong answer — worse than flipping a coin. Only standard-conditions rounds
+    (3 turns, temperature 0.7) count; forced-default rounds are excluded.
+    <a href="https://github.com/BytesFromToby" target="_blank" rel="noopener">Run it yourself →</a>
+  </p>
+
+  <script>
+    let tier = "all";
+    const rowsEl = document.getElementById("rows");
+
+    function devClass(d) { return d > 0 ? "dev-pos" : d < 0 ? "dev-neg" : ""; }
+    function pct(x) { return (x * 100).toFixed(1) + "%"; }
+    function signed(x) { return (x >= 0 ? "+" : "") + (x * 100).toFixed(1) + "%"; }
+
+    async function load() {
+      rowsEl.innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
+      try {
+        const resp = await fetch(`/api/leaderboard?tier=${tier}`);
+        const data = await resp.json();
+        if (!data.rows || data.rows.length === 0) {
+          rowsEl.innerHTML =
+            `<tr><td colspan="7" class="empty">No matchups yet with enough rounds` +
+            ` (min ${data.min_rounds ?? 10}). Be the first — run a batch and submit.</td></tr>`;
+          return;
+        }
+        rowsEl.innerHTML = data.rows.map((r) => `
+          <tr>
+            <td>${esc(r.box_holder)}</td>
+            <td>${esc(r.guesser)}</td>
+            <td class="num">${r.rounds}</td>
+            <td class="num">${r.guesser_wins}</td>
+            <td class="num">${pct(r.win_rate)}</td>
+            <td class="num ${devClass(r.deviation)}">${signed(r.deviation)}</td>
+            <td class="num">${r.clients ?? "—"}</td>
+          </tr>`).join("");
+      } catch (e) {
+        rowsEl.innerHTML = '<tr><td colspan="7" class="empty">Could not load the leaderboard.</td></tr>';
+      }
+    }
+
+    function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+    function setTier(t) {
+      tier = t;
+      document.getElementById("tab-all").classList.toggle("active", t === "all");
+      document.getElementById("tab-verified").classList.toggle("active", t === "verified");
+      load();
+    }
+    document.getElementById("tab-all").addEventListener("click", () => setTier("all"));
+    document.getElementById("tab-verified").addEventListener("click", () => setTier("verified"));
+    load();
+  </script>
+</body>
+</html>

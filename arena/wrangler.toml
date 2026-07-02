@@ -1,0 +1,23 @@
+# Banana Arena — Cloudflare Worker config. No secrets here.
+# MAINTAINER_KEY is set with: wrangler secret put MAINTAINER_KEY
+name = "banana-arena"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# D1 database binding. Create with:
+#   wrangler d1 create banana-arena
+#   wrangler d1 execute banana-arena --file=schema.sql --remote
+# then paste the returned database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "banana-arena"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[vars]
+# Non-secret config. Per-client daily round cap; override without code change.
+DAILY_ROUND_CAP = "500"
+MIN_ROUNDS = "10"
+
+# Static assets (the public leaderboard page).
+[assets]
+directory = "public"

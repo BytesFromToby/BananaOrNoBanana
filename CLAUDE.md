@@ -10,8 +10,16 @@ Python 3.11+ · FastAPI + uvicorn (server / referee / Ollama proxy / static host
 ## Commands
 - Test: `python -m pytest -q`
 - Run/demo: `python -m uvicorn server.app:app --host 127.0.0.1 --port 8000` — then open `http://127.0.0.1:8000`
+- Arena (separate JS deployable under `arena/`): Test `cd arena; npm test` (vitest) · Deploy `cd arena; wrangler deploy` (see `arena/README.md`)
 - Shell/OS: PowerShell on Windows — write all Test and Run commands in this dialect
 - UI evidence tool: playwright (python)
+
+## Second program — the arena
+`arena/` is a **separate Cloudflare Worker** (JS/ESM), one repo / two deployables. It is the
+community depository: ingest (`POST /api/submit`) + public leaderboard (`GET /api/leaderboard`),
+D1-backed. Its tests are vitest, not pytest. Shared contract with the Python app: the submission
+wire format IS the seat-aware `logs/rounds.jsonl` schema, and `arena/src/lib/aggregate.js` must
+match `server/stats.py` on the shared fixture (`tests/fixtures/arena_rounds.json`).
 
 ## History
 Mode: **git**   <!-- git (default) | none -->

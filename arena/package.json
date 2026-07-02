@@ -1,0 +1,16 @@
+{
+  "name": "banana-arena",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Community arena for Banana or No Banana — Cloudflare Worker ingest + public leaderboard.",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0",
+    "wrangler": "^3.90.0"
+  }
+}
