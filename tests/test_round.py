@@ -120,8 +120,9 @@ def _guesser_round(turns_remaining):
     return Round(
         round_id="x", box_contents=EMPTY, model="m",
         turns_remaining=turns_remaining, turn_limit=3,
-        left=PlayerConfig(seat="left", kind="ai", provider="ollama", model="m"),
-        right=PlayerConfig(seat="right", kind="ai", provider="ollama", model="m"),
+        holder=PlayerConfig(seat="red", kind="ai", provider="ollama", model="m"),
+        guesser=PlayerConfig(seat="blue", kind="ai", provider="ollama", model="m"),
+        holder_color="red", guesser_color="blue",
         transcript=[{"speaker": "box_holder", "turn": 0, "text": "It's empty, trust me."}],
     )
 

@@ -47,12 +47,51 @@ class Round:
     status: str = "EXCHANGE"
     turn_limit: int = 3
     temperature: float = 0.9
-    left: Optional[PlayerConfig] = None
-    right: Optional[PlayerConfig] = None
+    holder: Optional[PlayerConfig] = None
+    guesser: Optional[PlayerConfig] = None
+    holder_color: str = "red"
+    guesser_color: str = "blue"
 
 
 # In-memory store — one active round at a time is fine (spec §10).
 ROUNDS: dict = {}
+
+# In-memory role-rotation state (resets on restart, per the Assumptions). Advanced
+# once per completed+logged round so AI-vs-AI matchups alternate who holds vs guesses.
+ROTATION: dict = {"index": 0}
+
+
+def assign_roles(players: dict, human_role: str, rotation_index: int) -> dict:
+    """Decide which color holds the box and which guesses this game.
+
+    - Two humans → ValueError (two-human party mode is a permanent non-goal).
+    - One human → the human takes `human_role` (holder|guesser); the AI takes the other.
+    - No human (AI vs AI) → roles alternate by parity: even index Red holds / Blue guesses
+      (game 1 = Red holds, per the Assumptions), odd index swaps.
+    Returns {"holder_color", "guesser_color"}.
+    """
+    humans = [c for c in ("red", "blue") if players[c].kind == "human"]
+    if len(humans) == 2:
+        raise ValueError("two-human party mode is a permanent non-goal")
+    if len(humans) == 1:
+        hc = humans[0]
+        ac = "blue" if hc == "red" else "red"
+        if human_role == "holder":
+            return {"holder_color": hc, "guesser_color": ac}
+        return {"holder_color": ac, "guesser_color": hc}
+    if rotation_index % 2 == 0:
+        return {"holder_color": "red", "guesser_color": "blue"}
+    return {"holder_color": "blue", "guesser_color": "red"}
+
+
+def advance_rotation() -> None:
+    """Advance the AI-vs-AI role rotation by one completed round."""
+    ROTATION["index"] += 1
+
+
+def reset_rotation() -> None:
+    """Reset rotation state (test/util helper)."""
+    ROTATION["index"] = 0
 
 
 def flip_coin(rng=random) -> str:
@@ -61,10 +100,12 @@ def flip_coin(rng=random) -> str:
 
 
 def effective_settings(config: dict, overrides: dict) -> dict:
-    """Apply per-round overrides over config; raise ValueError on invalid values."""
+    """Apply per-round overrides over config; raise ValueError on invalid values.
+
+    The per-round `model` override is retired (each color's model comes from its own
+    config); only `turn_limit`/`temperature` are overridable per round.
+    """
     eff = dict(config)
-    if "model" in overrides and overrides["model"]:
-        eff["box_holder_model"] = overrides["model"]
     if "turn_limit" in overrides:
         tl = overrides["turn_limit"]
         if not isinstance(tl, int) or isinstance(tl, bool) or tl < 1:
@@ -81,43 +122,36 @@ def effective_settings(config: dict, overrides: dict) -> dict:
 def create_round(config: dict, overrides: dict = None, rng=random, players: dict = None) -> Round:
     """Create a fresh round with hidden contents and a full turn budget.
 
-    `overrides` may carry per-round {model, turn_limit, temperature}; invalid values raise ValueError.
-    `players` (optional) is {"left": PlayerConfig, "right": PlayerConfig}; resolved from the
-    environment (LEFT_PLAYER_*/RIGHT_PLAYER_*) if omitted. The per-round `model` override, if
-    given, applies to the left seat (the Box Holder) only.
+    `overrides` may carry per-round {turn_limit, temperature}; invalid values raise ValueError.
+    `players` (optional) is {"red": PlayerConfig, "blue": PlayerConfig}; resolved from the
+    environment (RED_PLAYER_*/BLUE_PLAYER_*) if omitted. Roles are assigned by `assign_roles`:
+    AI-vs-AI alternates by the in-memory rotation index, a lone human takes `human_role`, and
+    two humans raise ValueError. The holder/guesser are resolved solely from
+    `holder_color`/`guesser_color`.
     """
     overrides = overrides or {}
     eff = effective_settings(config, overrides)
     if players is None:
         players = load_players(os.environ)
-    left_base = players["left"]
-    if left_base.kind != "ai":
-        # Roadmap item 6 (human Box Holder UI) isn't built; fail at round creation
-        # with a clear message instead of crashing mid-stream.
-        raise ValueError("a human Box Holder isn't supported yet — set the left seat to AI")
-    # Model precedence: per-round override > the seat's own configured model >
-    # the config.json default (an Ollama name — wrong for a non-Ollama seat).
-    if overrides.get("model"):
-        left_model = eff["box_holder_model"]
-    else:
-        left_model = left_base.model or eff["box_holder_model"]
-    left = PlayerConfig(
-        seat="left",
-        kind=left_base.kind,
-        provider=left_base.provider,
-        model=left_model,
-        base_url=left_base.base_url,
-        api_key=left_base.api_key,
-    )
+    roles = assign_roles(players, config.get("human_role", "guesser"), ROTATION["index"])
+    holder_color, guesser_color = roles["holder_color"], roles["guesser_color"]
+    holder = players[holder_color]
+    guesser = players[guesser_color]
+    # A human Box Holder is valid (the human bluffs via /hold); it has no model.
+    # An AI holder's model comes from its own color config; the config.json default
+    # applies only when that color has no model of its own.
+    model = "" if holder.kind != "ai" else (holder.model or eff["box_holder_model"])
     r = Round(
         round_id=uuid.uuid4().hex,
         box_contents=flip_coin(rng),
-        model=left_model,
+        model=model,
         turns_remaining=eff["turn_limit"],
         turn_limit=eff["turn_limit"],
         temperature=eff["temperature"],
-        left=left,
-        right=players["right"],
+        holder=holder,
+        guesser=guesser,
+        holder_color=holder_color,
+        guesser_color=guesser_color,
     )
     ROUNDS[r.round_id] = r
     return r
@@ -151,7 +185,7 @@ async def generate_box_holder(r: Round, config: dict, turn: int) -> AsyncIterato
     """Stream a Box Holder line, accumulating it into the transcript at `turn`."""
     messages = _messages_for_model(r)
     parts = []
-    async for chunk in chat_stream(messages, cfg=r.left, temperature=r.temperature):
+    async for chunk in chat_stream(messages, cfg=r.holder, temperature=r.temperature):
         parts.append(chunk)
         yield chunk
     r.transcript.append({"speaker": "box_holder", "turn": turn, "text": "".join(parts)})
@@ -196,7 +230,7 @@ async def generate_guesser_text(r: Round) -> str:
     the browser's live-banter path)."""
     messages = _messages_for_guesser(r)
     parts = []
-    async for chunk in chat_stream(messages, cfg=r.right, temperature=r.temperature):
+    async for chunk in chat_stream(messages, cfg=r.guesser, temperature=r.temperature):
         parts.append(chunk)
     return "".join(parts)
 
@@ -227,6 +261,7 @@ async def advance_round(r: Round, config: dict) -> dict:
             r, config, final_answer=answer, correct=result["correct"],
             winner=result["winner"], forced_default=defaulted,
         )
+        advance_rotation()  # one advance per completed+logged round → AI-vs-AI roles alternate
         r.status = "DONE"
         box_contents = r.box_contents
         ROUNDS.pop(r.round_id, None)
@@ -247,6 +282,57 @@ async def advance_round(r: Round, config: dict) -> dict:
         "done": False,
         "guesser_text": guesser_text,
         "box_holder_text": box_holder_text,
+        "turns_remaining": r.turns_remaining,
+    }
+
+
+async def hold_round(r: Round, config: dict, text: str) -> dict:
+    """One human-Box-Holder turn — the engine behind /hold, mirroring advance_round with
+    the roles reversed. The human's `text` is the Box Holder's bluff; the AI Guesser then
+    responds. Caller guarantees a live EXCHANGE round with a human holder + AI guesser.
+
+    First call (turns_remaining == turn_limit) is the turn-0 opening. Returns
+    {"done": False, guesser_text, turns_remaining} while the exchange continues — with
+    NO box_contents, since that payload flows to the Guesser-facing UI — or the same
+    reveal shape as /advance when the Guesser locks in (or is force-defaulted).
+    prompts/box_holder.md is unused here (the human bluffs); the AI Guesser uses
+    prompts/guesser.md via generate_guesser_text.
+    """
+    holder_turn = r.turn_limit - r.turns_remaining
+    r.transcript.append({"speaker": "box_holder", "turn": holder_turn, "text": text})
+
+    forced = r.turns_remaining <= 0
+    guesser_text = await generate_guesser_text(r)
+    answer = parse_final_answer(guesser_text)
+    defaulted = answer is None and forced
+    if defaulted:
+        answer = NO_BANANA
+
+    if answer is not None:
+        result = score(answer, r.box_contents)
+        append_round(
+            r, config, final_answer=answer, correct=result["correct"],
+            winner=result["winner"], forced_default=defaulted,
+        )
+        advance_rotation()  # one advance per completed+logged round
+        r.status = "DONE"
+        box_contents = r.box_contents
+        ROUNDS.pop(r.round_id, None)
+        return {
+            "done": True,
+            "guesser_text": guesser_text,
+            "correct": result["correct"],
+            "box_contents": box_contents,
+            "winner": result["winner"],
+            "verdict_line": verdict_line(result["winner"], box_contents),
+        }
+
+    guesser_turn = r.turn_limit - r.turns_remaining + 1
+    r.transcript.append({"speaker": "guesser", "turn": guesser_turn, "text": guesser_text})
+    r.turns_remaining -= 1
+    return {
+        "done": False,
+        "guesser_text": guesser_text,
         "turns_remaining": r.turns_remaining,
     }
 

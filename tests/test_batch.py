@@ -7,12 +7,17 @@ import server.game as game
 from server.batch import main as batch_main
 from server.batch import run_batch
 from server.config import DEFAULTS
+from server.game import _KICKOFF
 from server.players import PlayerConfig
 from server.stats import aggregate, render
 
 
 class ScriptedPlayers:
-    """chat_stream fake: the guesser follows a per-round script; the box holder banters."""
+    """chat_stream fake: the guesser follows a per-round script; the box holder banters.
+
+    Roles rotate between the colors each round, so the guesser is identified by the
+    call shape (only the Box Holder's stream carries the hidden KICKOFF) rather than
+    the seat color."""
 
     def __init__(self, guesser_scripts):
         # guesser_scripts: list of lists — one list of lines per round, consumed in order.
@@ -20,26 +25,27 @@ class ScriptedPlayers:
         self.round_idx = -1
 
     async def __call__(self, messages, cfg, temperature):
-        if cfg.seat == "right":
-            yield self.scripts[self.round_idx].pop(0)
-        else:
-            if not messages[1:]:  # opening elicitation happens once per round
-                pass
+        is_holder = any(m.get("content") == _KICKOFF for m in messages)
+        if is_holder:
             yield "Trust me."
+        else:
+            yield self.scripts[self.round_idx].pop(0)
 
 
 def _players(guesser_model="qwen3:8b"):
     return {
-        "left": PlayerConfig(seat="left", kind="ai", provider="ollama", model="qwen3:8b"),
-        "right": PlayerConfig(seat="right", kind="ai", provider="ollama", model=guesser_model),
+        "red": PlayerConfig(seat="red", kind="ai", provider="ollama", model="qwen3:8b"),
+        "blue": PlayerConfig(seat="blue", kind="ai", provider="ollama", model=guesser_model),
     }
 
 
 @pytest.fixture(autouse=True)
 def clean_rounds():
     game.ROUNDS.clear()
+    game.reset_rotation()  # completions bump ROTATION; keep per-round role parity deterministic
     yield
     game.ROUNDS.clear()
+    game.reset_rotation()
 
 
 @pytest.fixture
@@ -93,15 +99,15 @@ def test_batch_runs_n_rounds_and_logs_each(monkeypatch, captured_log):
     assert game.ROUNDS == {}  # every round retired
 
 
-def test_batch_main_refuses_human_right_seat(monkeypatch):
+def test_batch_main_refuses_human_seat(monkeypatch):
     import server.batch as batch_mod
     monkeypatch.setattr(batch_mod, "load_players", lambda env: {
-        "left": PlayerConfig(seat="left", kind="ai", provider="ollama", model="m"),
-        "right": PlayerConfig(seat="right", kind="human"),
+        "red": PlayerConfig(seat="red", kind="ai", provider="ollama", model="m"),
+        "blue": PlayerConfig(seat="blue", kind="human"),
     })
     with pytest.raises(SystemExit) as exc:
         batch_main(["--rounds", "1"])
-    assert "right seat" in str(exc.value).lower()
+    assert "both colors ai" in str(exc.value).lower()
 
 
 # --- Leaderboard aggregation ---

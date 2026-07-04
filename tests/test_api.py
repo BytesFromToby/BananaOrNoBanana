@@ -32,7 +32,7 @@ class FakeDualPlayers:
         self.box_holder_calls = 0
 
     async def __call__(self, messages, cfg, temperature):
-        if cfg.seat == "right":
+        if cfg.seat == "blue":
             self.guesser_calls += 1
             yield self.guesser_lines[self.guesser_calls - 1]
         else:
@@ -41,18 +41,34 @@ class FakeDualPlayers:
                 yield c
 
 
+class ScriptedGuesser:
+    """Fake chat_stream for the human-holder path, where every AI call IS the Guesser
+    (the human bluffs, so there is no AI Box Holder call). Yields scripted lines in order."""
+
+    def __init__(self, lines):
+        self.lines = list(lines)
+        self.calls = 0
+
+    async def __call__(self, messages, cfg, temperature):
+        self.calls += 1
+        yield self.lines.pop(0)
+
+
 def _ai_guesser_players(guesser_model="guesser-model"):
+    # Fixed mapping this slice: Red holds, Blue guesses.
     return {
-        "left": PlayerConfig(seat="left", kind="ai", provider="ollama", model="qwen3:8b", base_url="http://x"),
-        "right": PlayerConfig(seat="right", kind="ai", provider="ollama", model=guesser_model, base_url="http://x"),
+        "red": PlayerConfig(seat="red", kind="ai", provider="ollama", model="qwen3:8b", base_url="http://x"),
+        "blue": PlayerConfig(seat="blue", kind="ai", provider="ollama", model=guesser_model, base_url="http://x"),
     }
 
 
 @pytest.fixture(autouse=True)
 def reset_rounds():
     game.ROUNDS.clear()
+    game.reset_rotation()  # completions now bump ROTATION; keep AI-vs-AI parity deterministic
     yield
     game.ROUNDS.clear()
+    game.reset_rotation()
 
 
 @pytest.fixture(autouse=True)
@@ -63,9 +79,9 @@ def default_players(monkeypatch):
     import server.app as appmod
 
     monkeypatch.setattr(appmod, "PLAYERS", {
-        "left": PlayerConfig(seat="left", kind="ai", provider="ollama",
-                             model="qwen3:8b", base_url="http://127.0.0.1:11434"),
-        "right": PlayerConfig(seat="right", kind="human"),
+        "red": PlayerConfig(seat="red", kind="ai", provider="ollama",
+                            model="qwen3:8b", base_url="http://127.0.0.1:11434"),
+        "blue": PlayerConfig(seat="blue", kind="human"),
     })
 
 
@@ -199,7 +215,7 @@ def test_round_applies_settings_overrides(client, fake_ollama):
     )
     assert resp.status_code == 200
     r = game.ROUNDS[resp.headers["X-Round-Id"]]
-    assert r.model == "gemma4:latest"
+    # Per-round model override is retired; turn_limit/temperature still apply.
     assert r.turns_remaining == 5
     assert r.temperature == 0.2
 
@@ -225,13 +241,13 @@ def test_players_endpoint_hides_api_key(client):
     resp = client.get("/api/players")
     assert resp.status_code == 200
     data = resp.json()
-    assert set(data) == {"left", "right"}
-    for seat in ("left", "right"):
+    assert set(data) == {"red", "blue"}
+    for seat in ("red", "blue"):
         assert set(data[seat]) == {"kind", "provider", "model", "base_url", "has_key"}
         assert "api_key" not in data[seat]
 
 
-def test_say_rejected_when_right_seat_is_ai(client, fake_ollama, monkeypatch):
+def test_say_rejected_when_guesser_is_ai(client, fake_ollama, monkeypatch):
     import server.app as appmod
 
     monkeypatch.setattr(appmod, "PLAYERS", _ai_guesser_players())
@@ -345,16 +361,16 @@ def env_file(tmp_path, monkeypatch):
 def fresh_players(monkeypatch):
     import server.app as app_module
     players = {
-        "left": PlayerConfig(seat="left", kind="ai", provider="ollama",
-                             model="qwen3:8b", base_url="http://127.0.0.1:11434"),
-        "right": PlayerConfig(seat="right", kind="human"),
+        "red": PlayerConfig(seat="red", kind="ai", provider="ollama",
+                            model="qwen3:8b", base_url="http://127.0.0.1:11434"),
+        "blue": PlayerConfig(seat="blue", kind="human"),
     }
     monkeypatch.setattr(app_module, "PLAYERS", players)
     return players
 
 
 def test_put_player_updates_seat_and_never_returns_key(client, env_file, fresh_players):
-    resp = client.put("/api/players/left", json={
+    resp = client.put("/api/players/red", json={
         "kind": "ai", "provider": "anthropic",
         "model": "claude-opus-4-8", "api_key": "sk-secret",
     })
@@ -367,32 +383,32 @@ def test_put_player_updates_seat_and_never_returns_key(client, env_file, fresh_p
     assert "sk-secret" not in resp.text
     # GET reflects the change and still never leaks the key.
     got = client.get("/api/players")
-    assert got.json()["left"]["provider"] == "anthropic"
+    assert got.json()["red"]["provider"] == "anthropic"
     assert "sk-secret" not in got.text
 
 
 def test_put_player_persists_to_env_file(client, env_file, fresh_players):
-    client.put("/api/players/right", json={
+    client.put("/api/players/blue", json={
         "kind": "ai", "provider": "openai_compat", "model": "gpt-x",
         "base_url": "https://api.openai.com/v1", "api_key": "sk-r",
     })
     text = env_file.read_text(encoding="utf-8")
-    assert "RIGHT_PLAYER_PROVIDER=openai_compat" in text
-    assert "RIGHT_PLAYER_API_KEY=sk-r" in text
+    assert "BLUE_PLAYER_PROVIDER=openai_compat" in text
+    assert "BLUE_PLAYER_API_KEY=sk-r" in text
 
 
 def test_put_player_omitted_key_keeps_saved_key(client, env_file, fresh_players):
-    fresh_players["left"].api_key = "sk-old"
-    resp = client.put("/api/players/left", json={"model": "qwen3:14b"})
+    fresh_players["red"].api_key = "sk-old"
+    resp = client.put("/api/players/red", json={"model": "qwen3:14b"})
     assert resp.status_code == 200
-    assert fresh_players["left"].api_key == "sk-old"
-    assert fresh_players["left"].model == "qwen3:14b"
+    assert fresh_players["red"].api_key == "sk-old"
+    assert fresh_players["red"].model == "qwen3:14b"
 
 
 def test_put_player_invalid_config_is_422(client, env_file, fresh_players):
-    resp = client.put("/api/players/left", json={"kind": "ai", "model": ""})
+    resp = client.put("/api/players/red", json={"kind": "ai", "model": ""})
     assert resp.status_code == 422
-    resp = client.put("/api/players/left", json={"provider": "gemini", "model": "m"})
+    resp = client.put("/api/players/red", json={"provider": "gemini", "model": "m"})
     assert resp.status_code == 422
 
 
@@ -400,25 +416,154 @@ def test_put_player_unknown_seat_is_404(client, env_file, fresh_players):
     assert client.put("/api/players/middle", json={"kind": "human"}).status_code == 404
 
 
-def test_round_uses_left_seat_model_when_no_override(fake_ollama):
-    """Seat-model precedence: a configured non-Ollama seat model must not be
-    clobbered by config.json's Ollama default."""
+def test_round_uses_holder_color_model(fake_ollama):
+    """The Box Holder's model comes from its own color config; config.json's Ollama
+    default applies only when that color has no model of its own."""
     from server.config import load_config
     players = {
-        "left": PlayerConfig(seat="left", kind="ai", provider="anthropic",
-                             model="claude-opus-4-8", api_key="k"),
-        "right": PlayerConfig(seat="right", kind="human"),
+        "red": PlayerConfig(seat="red", kind="ai", provider="anthropic",
+                            model="claude-opus-4-8", api_key="k"),
+        "blue": PlayerConfig(seat="blue", kind="human"),
     }
     r = game.create_round(load_config(), players=players)
     assert r.model == "claude-opus-4-8"
-    assert r.left.model == "claude-opus-4-8"
-    # An explicit per-round override still wins.
-    r2 = game.create_round(load_config(), overrides={"model": "qwen3:8b"}, players=players)
-    assert r2.model == "qwen3:8b"
+    assert r.holder.model == "claude-opus-4-8"
 
 
-def test_round_rejects_human_box_holder(client, fresh_players):
-    fresh_players["left"] = PlayerConfig(seat="left", kind="human")
+def test_round_records_colors_and_players_endpoint_red_blue(client, monkeypatch):
+    # DW2: with both seats AI, POST /api/round exposes the assigned colors (headers +
+    # in-memory Round), and GET /api/players returns both colors without api_key.
+    import server.app as appmod
+
+    monkeypatch.setattr(appmod, "PLAYERS", _ai_guesser_players())
+    appmod.PLAYERS["red"].api_key = "sk-should-not-leak"  # prove it never surfaces
+    monkeypatch.setattr(game, "chat_stream", FakeDualPlayers(guesser_lines=["Is it heavy?"]))
+
+    resp = client.post("/api/round")
+    assert resp.status_code == 200
+    round_id = resp.headers["X-Round-Id"]
+    # Rotation index 0 → Red holds, Blue guesses.
+    assert resp.headers["X-Holder-Color"] == "red"
+    assert resp.headers["X-Guesser-Color"] == "blue"
+    r = game.ROUNDS[round_id]
+    assert r.holder_color == "red"
+    assert r.guesser_color == "blue"
+
+    got = client.get("/api/players")
+    data = got.json()
+    assert set(data) == {"red", "blue"}
+    for seat in ("red", "blue"):
+        assert set(data[seat]) == {"kind", "provider", "model", "base_url", "has_key"}
+        assert "api_key" not in data[seat]
+    assert "sk-should-not-leak" not in got.text
+
+
+# --- Human Box Holder path (/hold, holder-only reveal, holder scoring) ---
+
+@pytest.fixture
+def human_holder(monkeypatch):
+    """One human seat as Box Holder + an AI Guesser (the other color).
+    With HUMAN_ROLE=holder and one human (blue), assign_roles → Blue holds, Red guesses."""
+    import server.app as appmod
+    monkeypatch.setattr(appmod, "PLAYERS", {
+        "red": PlayerConfig(seat="red", kind="ai", provider="ollama",
+                            model="guess-model", base_url="http://x"),
+        "blue": PlayerConfig(seat="blue", kind="human"),
+    })
+    monkeypatch.setitem(appmod.CONFIG, "human_role", "holder")
+
+
+def test_human_role_choice_guesser_and_holder_paths(client, monkeypatch, no_disk_log):
+    # DW3: HUMAN_ROLE=guesser → existing /say + /guess flow; HUMAN_ROLE=holder → /say
+    # rejected and /hold drives an AI-Guesser round to a reveal.
+    import server.app as appmod
+
+    # Guesser path — default seats (Red AI holds, Blue human guesses), HUMAN_ROLE=guesser.
+    monkeypatch.setattr(game, "chat_stream", FakeOllama())
+    round_id, _ = _start_round(client)
+    assert client.post(f"/api/round/{round_id}/say", json={"text": "Is it heavy?"}).status_code == 200
+    guess = client.post(f"/api/round/{round_id}/guess", json={"answer": "FINAL ANSWER: BANANA"})
+    assert guess.status_code == 200
+    assert round_id not in game.ROUNDS
+
+    # Holder path — Blue human holds, Red AI guesses, HUMAN_ROLE=holder.
+    monkeypatch.setattr(appmod, "PLAYERS", {
+        "red": PlayerConfig(seat="red", kind="ai", provider="ollama", model="g", base_url="http://x"),
+        "blue": PlayerConfig(seat="blue", kind="human"),
+    })
+    monkeypatch.setitem(appmod.CONFIG, "human_role", "holder")
+    monkeypatch.setattr(game, "chat_stream",
+                        ScriptedGuesser(["Is it heavy?", "FINAL ANSWER: BANANA"]))
+    resp = client.post("/api/round")
+    assert resp.status_code == 200
+    hid = resp.json()["round_id"]
+    assert client.post(f"/api/round/{hid}/say", json={"text": "hi"}).status_code == 409
+    cont = client.post(f"/api/round/{hid}/hold", json={"text": "It's empty, trust me."})
+    assert cont.status_code == 200 and cont.json()["done"] is False
+    final = client.post(f"/api/round/{hid}/hold", json={"text": "Really, nothing here."})
+    assert final.status_code == 200 and final.json()["done"] is True
+    assert hid not in game.ROUNDS
+
+
+def test_hold_reveals_to_holder_not_guesser(client, monkeypatch, no_disk_log, human_holder):
+    # DW4: the human-holder create response reveals box_contents (to the holder), but no
+    # /hold continuation nor the AI Guesser's line ever carries it.
+    monkeypatch.setattr(game, "chat_stream",
+                        ScriptedGuesser(["Is it heavy?", "FINAL ANSWER: BANANA"]))
+    resp = client.post("/api/round")
+    data = resp.json()
+    hid = data["round_id"]
+    assert "box_contents" in data  # the holder is allowed to know
+
+    cont = client.post(f"/api/round/{hid}/hold", json={"text": "Empty box, I swear."})
+    assert cont.status_code == 200
+    cd = cont.json()
+    assert cd["done"] is False
+    assert "box_contents" not in cd            # continuation payload never leaks the field
+    assert "box_contents" not in cont.text
+    assert "box_contents" not in cd["guesser_text"]
+
+
+def test_human_holder_wins_when_ai_guesser_wrong(client, monkeypatch, no_disk_log, human_holder):
+    # DW5: box is EMPTY, AI Guesser locks in BANANA (wrong) → the human holder wins.
+    monkeypatch.setattr(game, "chat_stream", ScriptedGuesser(["FINAL ANSWER: BANANA"]))
+    resp = client.post("/api/round")
+    hid = resp.json()["round_id"]
+    game.ROUNDS[hid].box_contents = game.EMPTY
+    out = client.post(f"/api/round/{hid}/hold", json={"text": "Definitely a banana in here!"})
+    assert out.status_code == 200
+    data = out.json()
+    assert data["done"] is True
+    assert data["winner"] == "box_holder"
+
+
+def test_hold_unknown_round_returns_404(client):
+    assert client.post("/api/round/nope/hold", json={"text": "x"}).status_code == 404
+
+
+def test_hold_rejected_when_no_human_holder(client, monkeypatch):
+    # An AI-holder round (default seats) has no human Box Holder → /hold is 409.
+    monkeypatch.setattr(game, "chat_stream", FakeOllama())
+    round_id, _ = _start_round(client)
+    assert client.post(f"/api/round/{round_id}/hold", json={"text": "x"}).status_code == 409
+
+
+def test_round_allows_human_box_holder(client, monkeypatch, human_holder):
+    # Slice 3 replaces test_round_rejects_human_box_holder: a human may now hold.
+    monkeypatch.setattr(game, "chat_stream", ScriptedGuesser(["Is it heavy?"]))
+    resp = client.post("/api/round")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "box_contents" in data
+    assert data["holder_color"] == "blue"   # the human holds
+    assert data["guesser_color"] == "red"
+
+
+def test_round_rejects_two_human_seats(client, monkeypatch):
+    import server.app as appmod
+    monkeypatch.setattr(appmod, "PLAYERS", {
+        "red": PlayerConfig(seat="red", kind="human"),
+        "blue": PlayerConfig(seat="blue", kind="human"),
+    })
     resp = client.post("/api/round")
     assert resp.status_code == 422
-    assert "left seat" in resp.json()["detail"]

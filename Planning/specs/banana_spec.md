@@ -10,6 +10,7 @@ A local, single-player retro game-show deception web app. A coin flip puts a ban
 - Does NOT: include batch runs or the deviation-from-50% leaderboard (v2, still fully deferred).
 - Does NOT: include an LLM-driven host, the win-condition variants (cooperative / hidden), a packaged downloadable, auth, or any multi-user/networked operation.
 - Does NOT: persist settings across server restarts (per-round only; the `config.json` defaults remain the baseline).
+- Does NOT (permanent non-goal, 2026-07-02): a **two-human party mode**. Every game has at least one AI player — human-vs-AI (either role) or AI-vs-AI only.
 - **Superseded (see "Configurable multi-provider player seats" below, added 2026-07-01):** the original v1 lines ruling out AI-vs-AI, the other three seats, and configuring the Guesser seat. Either seat can now be human or AI, and either AI seat can use any of three providers — this was the first step into that v2 territory, taken ahead of the batch/leaderboard work which is still deferred.
 
 ## Feature: Round setup & coin flip
@@ -112,7 +113,7 @@ A settings panel lets the player choose, before starting a round, which installe
 Role-assignment policy:
 - **AI vs AI:** the Box Holder/Guesser roles **alternate every completed game**. This cancels role-assignment bias so a Red-vs-Blue matchup measures both directions (Red-holds-Blue-guesses *and* Blue-holds-Red-guesses). Rotation state is in-memory (resets on restart), advanced once per completed+logged round.
 - **One human present:** the human **chooses** their role (Guesser or Box Holder) — no auto-rotation; the choice governs until changed. The AI takes the other role.
-- Human vs human (party) stays deferred (needs turn-passing UX).
+- Human vs human (party) is a **non-goal — will not be built.** The game is a human against a machine (either role) or machine vs machine; a two-human party mode is explicitly out of scope, permanently.
 
 Human Box Holder mode (new interaction, when the human chooses to hold):
 - The server flips the coin and reveals the contents **to the human holder only** (they are the Box Holder — allowed to know). The Guesser-facing no-leak invariant still holds: no *Guesser*-facing response carries `box_contents`.
@@ -137,7 +138,7 @@ Human Box Holder mode (new interaction, when the human chooses to hold):
 - Hard rename `LEFT_PLAYER_*`→`RED_PLAYER_*`, `RIGHT_PLAYER_*`→`BLUE_PLAYER_*`; the local `.env` is migrated in place (single local user; no long back-compat window). — assumed.
 - Rotation starts with Red as Box Holder in game 1, then alternates. — arbitrary, low-surprise.
 - Rotation state is in-memory and per-process (resets on restart); acceptable since rounds are already ephemeral and one-at-a-time. — from §10.
-- Human role choice is a single setting (`HUMAN_ROLE`, default `guesser`); human-vs-human alternation is out of scope. — proportional.
+- Human role choice is a single setting (`HUMAN_ROLE`, default `guesser`). At most one player is human; two-human games are a permanent non-goal (see Scope). — decided.
 - The per-round `model` override is retired rather than reinterpreted. — reduces ambiguity under rotation.
 
 ## Feature: Configurable multi-provider player seats (Left/Right)

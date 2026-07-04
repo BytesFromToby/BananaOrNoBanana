@@ -8,22 +8,25 @@ from server.log import append_round
 from server.players import PlayerConfig
 
 REQUIRED_FIELDS = {
-    "round_id", "ts", "mode", "box_holder_provider", "box_holder_model",
+    "round_id", "ts", "mode", "holder_color", "guesser_color",
+    "box_holder_provider", "box_holder_model",
     "guesser_provider", "guesser_model", "box_contents", "turn_limit",
     "transcript", "guesser_turns_used", "final_answer", "correct", "winner",
     "forced_default",
 }
 
 
-def _round(right=None):
+def _round(guesser=None):
     return Round(
         round_id="abc123",
         box_contents="EMPTY",
         model="qwen3:8b",
         turns_remaining=1,
         turn_limit=3,
-        left=PlayerConfig(seat="left", kind="ai", provider="ollama", model="qwen3:8b"),
-        right=right or PlayerConfig(seat="right", kind="human"),
+        holder=PlayerConfig(seat="red", kind="ai", provider="ollama", model="qwen3:8b"),
+        guesser=guesser or PlayerConfig(seat="blue", kind="human"),
+        holder_color="red",
+        guesser_color="blue",
         transcript=[
             {"speaker": "box_holder", "turn": 0, "text": "Welcome!"},
             {"speaker": "guesser", "turn": 1, "text": "banana?"},
@@ -57,8 +60,8 @@ def test_object_has_all_fields(tmp_path):
 def test_mode_and_seats_derived_not_hardcoded(tmp_path):
     """Amended Done-when: mode follows the actual seats; each AI seat is attributable."""
     path = str(tmp_path / "rounds.jsonl")
-    ai_right = PlayerConfig(seat="right", kind="ai", provider="anthropic", model="claude-opus-4-8")
-    append_round(_round(right=ai_right), dict(DEFAULTS), "BANANA", False, "box_holder", path=path)
+    ai_guesser = PlayerConfig(seat="blue", kind="ai", provider="anthropic", model="claude-opus-4-8")
+    append_round(_round(guesser=ai_guesser), dict(DEFAULTS), "BANANA", False, "box_holder", path=path)
     obj = json.loads(open(path, encoding="utf-8").read().splitlines()[0])
     assert obj["mode"] == "ai_guesser_vs_ai_box_holder"
     assert obj["box_holder_provider"] == "ollama"

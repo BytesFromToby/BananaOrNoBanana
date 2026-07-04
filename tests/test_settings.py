@@ -17,7 +17,8 @@ def test_create_round_applies_overrides():
         dict(DEFAULTS),
         overrides={"model": "gemma4:latest", "turn_limit": 5, "temperature": 0.2},
     )
-    assert r.model == "gemma4:latest"
+    # The per-round model override is retired (each color's model comes from its own
+    # config); turn_limit/temperature overrides still apply.
     assert r.turn_limit == 5
     assert r.turns_remaining == 5
     assert r.temperature == 0.2

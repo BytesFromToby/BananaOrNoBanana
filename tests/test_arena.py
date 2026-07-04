@@ -184,8 +184,8 @@ def test_batch_no_submit_makes_no_network_call(monkeypatch):
     monkeypatch.setattr(batch_mod.stats, "main", lambda: None)
     from server.players import PlayerConfig
     monkeypatch.setattr(batch_mod, "load_players", lambda env: {
-        "left": PlayerConfig(seat="left", kind="ai", provider="ollama", model="m"),
-        "right": PlayerConfig(seat="right", kind="ai", provider="ollama", model="m"),
+        "red": PlayerConfig(seat="red", kind="ai", provider="ollama", model="m"),
+        "blue": PlayerConfig(seat="blue", kind="ai", provider="ollama", model="m"),
     })
     batch_mod.main(["--rounds", "1"])  # no --submit
     assert called["n"] == 0

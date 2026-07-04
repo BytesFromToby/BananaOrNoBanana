@@ -19,6 +19,19 @@ def test_override_merges_over_defaults(tmp_path):
     assert cfg["ollama_url"] == DEFAULTS["ollama_url"]
 
 
+def test_human_role_defaults_honors_and_falls_back(monkeypatch):
+    """HUMAN_ROLE governs a present human's role: default guesser, honors a valid
+    value, falls back to guesser on anything invalid."""
+    monkeypatch.delenv("HUMAN_ROLE", raising=False)
+    assert load_config("does_not_exist_config.json")["human_role"] == "guesser"
+    monkeypatch.setenv("HUMAN_ROLE", "holder")
+    assert load_config("does_not_exist_config.json")["human_role"] == "holder"
+    monkeypatch.setenv("HUMAN_ROLE", "  HOLDER  ")  # stripped + lowercased
+    assert load_config("does_not_exist_config.json")["human_role"] == "holder"
+    monkeypatch.setenv("HUMAN_ROLE", "referee")  # invalid → guesser
+    assert load_config("does_not_exist_config.json")["human_role"] == "guesser"
+
+
 def test_standard_settings_check():
     from server.config import STANDARD_SETTINGS, is_standard
     assert STANDARD_SETTINGS == {"turn_limit": 3, "temperature": 0.7}

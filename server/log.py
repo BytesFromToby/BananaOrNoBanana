@@ -23,19 +23,22 @@ def append_round(r, config, final_answer, correct, winner, forced_default=False,
     are flagged so the deviation-from-50% metric can exclude them.
     """
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    guesser_provider, guesser_model = _seat_identity(r.right)
-    box_holder_provider = r.left.provider if r.left is not None else ""
-    mode = (
-        "ai_guesser_vs_ai_box_holder"
-        if guesser_provider != "human"
-        else "human_guesser_vs_ai_box_holder"
-    )
+    box_holder_provider, box_holder_model = _seat_identity(r.holder)
+    guesser_provider, guesser_model = _seat_identity(r.guesser)
+    if box_holder_provider == "human":
+        mode = "human_box_holder_vs_ai_guesser"
+    elif guesser_provider == "human":
+        mode = "human_guesser_vs_ai_box_holder"
+    else:
+        mode = "ai_guesser_vs_ai_box_holder"
     record = {
         "round_id": r.round_id,
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "mode": mode,
+        "holder_color": r.holder_color,
+        "guesser_color": r.guesser_color,
         "box_holder_provider": box_holder_provider,
-        "box_holder_model": r.model,
+        "box_holder_model": box_holder_model,
         "guesser_provider": guesser_provider,
         "guesser_model": guesser_model,
         "box_contents": r.box_contents,

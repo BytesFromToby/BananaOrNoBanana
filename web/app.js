@@ -2,7 +2,11 @@
 "use strict";
 
 let roundId = null;
-let PLAYERS = { left: { kind: "ai", provider: "ollama", model: "" }, right: { kind: "human" } };
+// Two persistent colored seats; roles (holder/guesser) are assigned per round by the server.
+let PLAYERS = { red: { kind: "ai", provider: "ollama", model: "" }, blue: { kind: "human" } };
+let holderColor = null; // set per round from the server's assignment
+let guesserColor = null;
+let humanColor = null; // which color (if any) the human occupies
 
 const el = (id) => document.getElementById(id);
 
@@ -12,16 +16,7 @@ async function loadModels() {
     const resp = await fetch("/api/models");
     if (!resp.ok) return;
     const data = await resp.json();
-    const select = el("model-select");
-    select.innerHTML = "";
-    for (const name of data.models) {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      if (name === data.default) opt.selected = true;
-      select.appendChild(opt);
-    }
-    // Same list feeds the seat editors' model fields as suggestions (Ollama only).
+    // The model list feeds the seat editors' model fields as suggestions (Ollama only).
     const datalist = el("ollama-models");
     datalist.innerHTML = "";
     for (const name of data.models) {
@@ -30,11 +25,11 @@ async function loadModels() {
       datalist.appendChild(opt);
     }
   } catch (e) {
-    /* Ollama not reachable; dropdown stays empty and the server default is used. */
+    /* Ollama not reachable; suggestions stay empty and the server default is used. */
   }
 }
 
-// --- Seat editors (two credential slots: left/Box Holder, right/Guesser) ---
+// --- Seat editors (two credential slots: Red / Blue) ---
 function seatEditor(seat) {
   return el(`seat-${seat}`);
 }
@@ -103,17 +98,18 @@ async function loadPlayers() {
     if (!resp.ok) return;
     PLAYERS = await resp.json();
   } catch (e) {
-    /* Server default (Left=AI/ollama, Right=human) stays in effect. */
+    /* Server default (Red=AI/ollama, Blue=human) stays in effect. */
   }
+  humanColor =
+    PLAYERS.red.kind === "human" ? "red" : PLAYERS.blue.kind === "human" ? "blue" : null;
   el("seats-summary").textContent =
-    `Left (Box Holder): ${describeSeat(PLAYERS.left)} · Right (Guesser): ${describeSeat(PLAYERS.right)}`;
-  el("left-sub").textContent = PLAYERS.left.model || PLAYERS.left.provider;
-  el("right-title").textContent = PLAYERS.right.kind === "human" ? "You (Guesser)" : "Guesser";
-  el("right-sub").textContent = describeSeat(PLAYERS.right);
-  // The per-round model dropdown only makes sense for the Ollama-backed Left seat.
-  el("model-select-row").classList.toggle("hidden", PLAYERS.left.provider !== "ollama");
-  fillSeatEditor("left");
-  fillSeatEditor("right");
+    `Red: ${describeSeat(PLAYERS.red)} · Blue: ${describeSeat(PLAYERS.blue)}`;
+  el("red-figure").textContent = PLAYERS.red.kind === "human" ? "🧑" : "🤖";
+  el("blue-figure").textContent = PLAYERS.blue.kind === "human" ? "🧑" : "🤖";
+  el("red-sub").textContent = describeSeat(PLAYERS.red);
+  el("blue-sub").textContent = describeSeat(PLAYERS.blue);
+  fillSeatEditor("red");
+  fillSeatEditor("blue");
 }
 
 const STANDARD_SETTINGS = { turn_limit: 3, temperature: 0.7 };
@@ -131,17 +127,12 @@ function setBypass(on) {
 
 function currentSettings() {
   const bypass = el("bypass-check").checked;
-  const s = bypass
+  return bypass
     ? {
         turn_limit: Number(el("turn-input").value),
         temperature: Number(el("temp-input").value),
       }
     : { ...STANDARD_SETTINGS };
-  // The dropdown holds Ollama names — only meaningful when the Left seat IS Ollama;
-  // for any other provider the seat's own configured model governs.
-  const model = el("model-select").value;
-  if (model && PLAYERS.left.provider === "ollama") s.model = model;
-  return s;
 }
 const dialogue = el("dialogue");
 const hostLine = el("host-line");
@@ -151,12 +142,19 @@ function hostSays(text) {
   hostLine.textContent = text;
 }
 
+// Who to name for a transcript line: "You" when the human holds that role, else the role.
+function speakerLabel(speaker) {
+  const roleColor = speaker === "box_holder" ? holderColor : guesserColor;
+  if (humanColor && roleColor === humanColor) return "You";
+  return speaker === "box_holder" ? "Box Holder" : "Guesser";
+}
+
 function addMessage(speaker, text) {
   const div = document.createElement("div");
   div.className = "msg " + speaker;
   const who = document.createElement("span");
   who.className = "who";
-  who.textContent = speaker === "box_holder" ? "Box Holder" : "You";
+  who.textContent = speakerLabel(speaker);
   div.appendChild(who);
   const body = document.createElement("span");
   body.textContent = text;
@@ -189,14 +187,29 @@ function setBusy(busy) {
   el("say-input").disabled = busy;
 }
 
+function setHoldBusy(busy) {
+  el("hold-btn").disabled = busy;
+  el("hold-input").disabled = busy;
+}
+
+// Show which color holds vs guesses this game.
+function showRoles(hc, gc) {
+  holderColor = hc;
+  guesserColor = gc;
+  el("red-role").textContent = hc === "red" ? "Box Holder" : "Guesser";
+  el("blue-role").textContent = hc === "blue" ? "Box Holder" : "Guesser";
+}
+
 async function startRound() {
   el("start-btn").classList.add("hidden");
   el("reveal").classList.add("hidden");
+  el("play-controls").classList.add("hidden");
+  el("autoplay-controls").classList.add("hidden");
+  el("hold-controls").classList.add("hidden");
   dialogue.innerHTML = "";
   el("box").classList.remove("open");
   el("box").classList.add("closed");
   el("box").querySelector(".box-face").textContent = "?";
-  hostSays("The Box Holder has peeked inside. Read the liar!");
 
   const settings = currentSettings();
   const resp = await fetch("/api/round", {
@@ -209,23 +222,80 @@ async function startRound() {
     el("start-btn").classList.remove("hidden");
     return;
   }
+  el("settings-panel").classList.add("hidden");
+
+  const ctype = resp.headers.get("Content-Type") || "";
+  if (ctype.includes("application/json")) {
+    // Human is the Box Holder: the server reveals the box to us (the holder), no AI opening.
+    const data = await resp.json();
+    roundId = data.round_id;
+    showRoles(data.holder_color, data.guesser_color);
+    startHumanHolder(data, settings.turn_limit);
+    return;
+  }
+
+  // AI Box Holder: streamed opening bluff, colors carried in headers.
   roundId = resp.headers.get("X-Round-Id");
+  showRoles(resp.headers.get("X-Holder-Color"), resp.headers.get("X-Guesser-Color"));
+  hostSays("The Box Holder has peeked inside. Read the liar!");
   const target = addMessage("box_holder", "");
   await streamInto(resp, target);
-
-  el("settings-panel").classList.add("hidden");
   turnsEl.textContent = `Turns remaining: ${settings.turn_limit}`;
 
-  if (PLAYERS.right.kind === "ai") {
-    el("play-controls").classList.add("hidden");
+  if (PLAYERS[guesserColor].kind === "ai") {
     el("autoplay-controls").classList.remove("hidden");
     el("autoplay-btn").disabled = false;
   } else {
-    el("autoplay-controls").classList.add("hidden");
     el("play-controls").classList.remove("hidden");
     setBusy(false);
     el("say-input").focus();
   }
+}
+
+// Human-Box-Holder flow: show the secret to the holder, then take bluffs via /hold.
+function startHumanHolder(data, turnLimit) {
+  el("hold-secret").textContent =
+    data.box_contents === "BANANA"
+      ? "🍌 You peeked: there IS a banana. Convince them there isn't."
+      : "∅ You peeked: the box is EMPTY. Convince them there is a banana.";
+  turnsEl.textContent = `Turns remaining: ${turnLimit}`;
+  hostSays("You've peeked in the box! Bluff the Guesser into calling it wrong.");
+  el("hold-controls").classList.remove("hidden");
+  setHoldBusy(false);
+  el("hold-input").focus();
+}
+
+async function hold() {
+  const input = el("hold-input");
+  const text = input.value.trim();
+  if (!text) return;
+  addMessage("box_holder", text);
+  input.value = "";
+  setHoldBusy(true);
+
+  const resp = await fetch(`/api/round/${roundId}/hold`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!resp.ok) {
+    hostSays("The Guesser hit a snag — try that bluff again.");
+    setHoldBusy(false);
+    return;
+  }
+  const data = await resp.json();
+  addMessage("guesser", data.guesser_text);
+  if (data.done) {
+    el("hold-controls").classList.add("hidden");
+    revealBox(data);
+    return;
+  }
+  turnsEl.textContent = `Turns remaining: ${data.turns_remaining}`;
+  setHoldBusy(false);
+  if (data.turns_remaining <= 0) {
+    hostSays("Last word! One more bluff and the Guesser must lock in.");
+  }
+  el("hold-input").focus();
 }
 
 async function autoPlay() {
@@ -301,14 +371,24 @@ async function guess(answer) {
 
 function revealBox(data) {
   el("play-controls").classList.add("hidden");
+  el("hold-controls").classList.add("hidden");
   const box = el("box");
   box.classList.remove("closed");
   box.classList.add("open");
   box.querySelector(".box-face").textContent = data.box_contents === "BANANA" ? "🍌" : "∅";
   hostSays(data.verdict_line);
   el("reveal-verdict").textContent = data.verdict_line;
-  el("reveal-winner").textContent =
-    data.winner === "guesser" ? "You win! 🎉" : "The Box Holder wins!";
+  // Frame the outcome for whichever role the human played (neutral for AI-vs-AI).
+  const humanWon =
+    (data.winner === "guesser" && humanColor === guesserColor) ||
+    (data.winner === "box_holder" && humanColor === holderColor);
+  el("reveal-winner").textContent = humanColor
+    ? humanWon
+      ? "You win! 🎉"
+      : "You lose!"
+    : data.winner === "guesser"
+    ? "Guesser wins!"
+    : "Box Holder wins!";
   el("reveal").classList.remove("hidden");
 }
 
@@ -322,7 +402,7 @@ el("temp-input").addEventListener("input", (e) => {
 });
 el("bypass-check").addEventListener("change", (e) => setBypass(e.target.checked));
 el("autoplay-btn").addEventListener("click", autoPlay);
-for (const seat of ["left", "right"]) {
+for (const seat of ["red", "blue"]) {
   seatField(seat, "kind").addEventListener("change", () => refreshSeatEditor(seat));
   seatEditor(seat)
     .querySelector(".seat-save")
@@ -332,6 +412,10 @@ loadModels().then(loadPlayers);
 el("say-btn").addEventListener("click", say);
 el("say-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") say();
+});
+el("hold-btn").addEventListener("click", hold);
+el("hold-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") hold();
 });
 el("guess-banana").addEventListener("click", () => guess("FINAL ANSWER: BANANA"));
 el("guess-nobanana").addEventListener("click", () => guess("FINAL ANSWER: NO BANANA"));

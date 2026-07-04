@@ -16,7 +16,7 @@ _ENV_SUFFIXES = ("TYPE", "PROVIDER", "MODEL", "BASE_URL", "API_KEY")
 
 @dataclass
 class PlayerConfig:
-    seat: str  # "left" | "right"
+    seat: str  # color: "red" | "blue"
     kind: str  # "human" | "ai"
     provider: str = "ollama"
     model: str = ""
@@ -24,8 +24,12 @@ class PlayerConfig:
     api_key: str = ""
 
 
+# Legacy env prefixes kept working via fallback: red was the left seat, blue the right.
+_LEGACY_PREFIX = {"RED_PLAYER": "LEFT_PLAYER", "BLUE_PLAYER": "RIGHT_PLAYER"}
+
+
 def load_player(prefix: str, env: dict, default_kind: str = "human") -> PlayerConfig:
-    """Build a PlayerConfig for `prefix` ("LEFT"/"RIGHT") by reading `{prefix}_*` keys from `env`."""
+    """Build a PlayerConfig for `prefix` ("RED_PLAYER"/"BLUE_PLAYER") by reading `{prefix}_*` keys from `env`."""
     kind = (env.get(f"{prefix}_TYPE") or default_kind).strip().lower()
     provider = (env.get(f"{prefix}_PROVIDER") or "ollama").strip().lower()
     base_url = env.get(f"{prefix}_BASE_URL") or (
@@ -41,12 +45,62 @@ def load_player(prefix: str, env: dict, default_kind: str = "human") -> PlayerCo
     )
 
 
+def _has_prefix(env: dict, prefix: str) -> bool:
+    """True if any `{prefix}_*` key is present in the mapping."""
+    return any(k.startswith(f"{prefix}_") for k in env)
+
+
+def _load_color(color: str, prefix: str, env: dict, default_kind: str) -> PlayerConfig:
+    """Load one color from its new prefix, falling back to the legacy prefix when the
+    new keys are absent but the legacy ones are present (keeps an existing .env working)."""
+    if not _has_prefix(env, prefix) and _has_prefix(env, _LEGACY_PREFIX[prefix]):
+        cfg = load_player(_LEGACY_PREFIX[prefix], env, default_kind=default_kind)
+        cfg.seat = color
+        return cfg
+    cfg = load_player(prefix, env, default_kind=default_kind)
+    cfg.seat = color
+    return cfg
+
+
 def load_players(env: dict) -> dict:
-    """Return {"left": PlayerConfig, "right": PlayerConfig} from an environ-like mapping."""
+    """Return {"red": PlayerConfig, "blue": PlayerConfig} from an environ-like mapping.
+
+    Reads the new `RED_PLAYER_*` / `BLUE_PLAYER_*` prefixes; if a color's new keys are
+    absent but its legacy prefix (LEFT_PLAYER for red, RIGHT_PLAYER for blue) is present,
+    it loads from the legacy prefix so an unmigrated `.env` still works. Default kinds
+    preserve today's single-human-vs-AI baseline: red → ai, blue → human.
+    """
     return {
-        "left": load_player("LEFT_PLAYER", env, default_kind="ai"),
-        "right": load_player("RIGHT_PLAYER", env, default_kind="human"),
+        "red": _load_color("red", "RED_PLAYER", env, default_kind="ai"),
+        "blue": _load_color("blue", "BLUE_PLAYER", env, default_kind="human"),
     }
+
+
+def migrate_env_file(path: str = ".env") -> None:
+    """Rename legacy seat keys in place: `LEFT_PLAYER_*` → `RED_PLAYER_*`,
+    `RIGHT_PLAYER_*` → `BLUE_PLAYER_*`. Values, comments, unrelated lines, and order
+    are preserved. No-op if the file is absent or already migrated.
+    """
+    if not os.path.exists(path):
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    out = []
+    for line in lines:
+        if "=" in line and not line.lstrip().startswith("#"):
+            key, value = line.split("=", 1)
+            key_stripped = key.strip()
+            renamed = None
+            if key_stripped.startswith("LEFT_PLAYER_"):
+                renamed = "RED_PLAYER_" + key_stripped[len("LEFT_PLAYER_"):]
+            elif key_stripped.startswith("RIGHT_PLAYER_"):
+                renamed = "BLUE_PLAYER_" + key_stripped[len("RIGHT_PLAYER_"):]
+            if renamed is not None:
+                out.append(f"{renamed}={value}")
+                continue
+        out.append(line)
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(out) + "\n")
 
 
 def public_view(cfg: PlayerConfig) -> dict:

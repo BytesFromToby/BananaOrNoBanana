@@ -7,7 +7,7 @@ import os
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -58,22 +58,22 @@ async def models():
 @app.get("/api/players")
 async def players():
     """Browser-safe seat info — kind/provider/model/base_url/has_key, never api_key."""
-    return {"left": public_view(PLAYERS["left"]), "right": public_view(PLAYERS["right"])}
+    return {"red": public_view(PLAYERS["red"]), "blue": public_view(PLAYERS["blue"])}
 
 
 @app.put("/api/players/{seat}")
 async def update_player(seat: str, body: SeatBody):
-    """Configure a seat from the browser (localhost, single user). The API key is
+    """Configure a color from the browser (localhost, single user). The API key is
     write-only: accepted here, persisted to .env, never returned. Replaces the seat
     object rather than mutating it, so a round already in flight keeps its config."""
-    if seat not in ("left", "right"):
-        raise HTTPException(status_code=404, detail="seat must be 'left' or 'right'")
+    if seat not in ("red", "blue"):
+        raise HTTPException(status_code=404, detail="seat must be 'red' or 'blue'")
     try:
         cfg = build_seat(seat, body.model_dump(exclude_unset=True), current=PLAYERS[seat])
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     PLAYERS[seat] = cfg
-    persist_seat_env("LEFT_PLAYER" if seat == "left" else "RIGHT_PLAYER", cfg, path=ENV_PATH)
+    persist_seat_env("RED_PLAYER" if seat == "red" else "BLUE_PLAYER", cfg, path=ENV_PATH)
     return public_view(cfg)
 
 
@@ -85,12 +85,29 @@ async def create_round(body: Optional[RoundBody] = None):
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+    if r.holder.kind == "human":
+        # The requester IS the Box Holder, so revealing the box here is allowed — the
+        # no-leak invariant only bars Guesser-facing responses. No AI opening; the human
+        # bluffs via /hold.
+        return JSONResponse({
+            "round_id": r.round_id,
+            "holder_color": r.holder_color,
+            "guesser_color": r.guesser_color,
+            "box_contents": r.box_contents,
+        })
+
     async def stream():
         async for chunk in game.elicit_opening(r, CONFIG):
             yield chunk
 
     return StreamingResponse(
-        stream(), media_type="text/plain", headers={"X-Round-Id": r.round_id}
+        stream(),
+        media_type="text/plain",
+        headers={
+            "X-Round-Id": r.round_id,
+            "X-Holder-Color": r.holder_color,
+            "X-Guesser-Color": r.guesser_color,
+        },
     )
 
 
@@ -99,8 +116,8 @@ async def say(round_id: str, body: SayBody):
     r = game.get_round(round_id)
     if r is None:
         raise HTTPException(status_code=404, detail="round not found")
-    if r.right.kind == "ai":
-        raise HTTPException(status_code=409, detail="right seat is AI-controlled; use /advance")
+    if r.guesser.kind != "human":
+        raise HTTPException(status_code=409, detail="the Guesser is AI-controlled; use /advance")
     if r.turns_remaining <= 0 or r.status != "EXCHANGE":
         raise HTTPException(status_code=409, detail="no turns left or round not in exchange")
 
@@ -119,6 +136,24 @@ async def say(round_id: str, body: SayBody):
     )
 
 
+@app.post("/api/round/{round_id}/hold")
+async def hold(round_id: str, body: SayBody):
+    """Drive one human-Box-Holder turn — the human's bluff in, the AI Guesser's line out.
+
+    The mirror of /advance: /hold requires a human holder (+ AI guesser), /advance requires
+    an AI guesser regardless of holder. The reveal is returned directly on lock-in.
+    """
+    r = game.get_round(round_id)
+    if r is None:
+        raise HTTPException(status_code=404, detail="round not found")
+    if r.holder.kind != "human":
+        raise HTTPException(status_code=409, detail="this round has no human Box Holder")
+    if r.status != "EXCHANGE":
+        raise HTTPException(status_code=409, detail="round not in exchange")
+
+    return await game.hold_round(r, CONFIG, body.text)
+
+
 @app.post("/api/round/{round_id}/guess")
 async def guess(round_id: str, body: GuessBody):
     r = game.get_round(round_id)
@@ -132,6 +167,7 @@ async def guess(round_id: str, body: GuessBody):
     append_round(
         r, CONFIG, final_answer=answer, correct=result["correct"], winner=result["winner"]
     )
+    game.advance_rotation()  # one advance per completed+logged round (human-Guesser path)
     r.status = "DONE"
     box_contents = r.box_contents
     game.ROUNDS.pop(round_id, None)
@@ -146,7 +182,7 @@ async def guess(round_id: str, body: GuessBody):
 
 @app.post("/api/round/{round_id}/advance")
 async def advance(round_id: str):
-    """Drive one AI-Guesser turn (right seat is AI) — non-streamed, one call per turn.
+    """Drive one AI-Guesser turn (the Guesser is AI) — non-streamed, one call per turn.
 
     Either continues the exchange (a guesser line + a box-holder reply) or, if the
     Guesser's line parses as a lock-in, ends the round and returns the reveal directly.
@@ -154,8 +190,8 @@ async def advance(round_id: str):
     r = game.get_round(round_id)
     if r is None:
         raise HTTPException(status_code=404, detail="round not found")
-    if r.right.kind != "ai":
-        raise HTTPException(status_code=409, detail="right seat is not AI-controlled")
+    if r.guesser.kind != "ai":
+        raise HTTPException(status_code=409, detail="the Guesser is not AI-controlled")
     if r.status != "EXCHANGE":
         raise HTTPException(status_code=409, detail="round not in exchange")
 

@@ -87,6 +87,12 @@ body {
 .podium h2 { margin: 0 0 8px; font-size: 18px; }
 .robot { font-size: 54px; }
 .sub { font-size: 13px; opacity: 0.85; margin: 4px 0 0; }
+.role { font-size: 13px; text-transform: uppercase; font-weight: bold; color: var(--pop);
+  margin: 4px 0 0; min-height: 16px; letter-spacing: 1px; }
+
+/* The two seats are persistent colors; the role rotates and shows in .role. */
+.player-red { background: linear-gradient(#d24a3a, #7a1f16); }
+.player-blue { background: linear-gradient(#3a6bd2, #16307a); }
 
 .box-area { text-align: center; }
 .box {
@@ -136,6 +142,12 @@ body {
 }
 .lockin-row { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
 .lockin-label { color: var(--cream); font-size: 15px; }
+
+/* Holder-only peek — the secret shown to the human Box Holder, never to the Guesser view. */
+.hold-secret {
+  color: var(--pop); font-size: 18px; font-weight: bold; font-family: Georgia, serif;
+  margin: 0 0 12px; text-align: center;
+}
 
 .btn {
   background: var(--gold); color: var(--deep); border: 3px solid var(--deep);

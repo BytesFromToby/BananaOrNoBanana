@@ -20,10 +20,11 @@
   </div>
 
   <main class="stage">
-    <section class="podium" id="podium-box">
-      <h2>Box Holder</h2>
-      <div class="robot">🤖</div>
-      <p class="sub" id="left-sub">qwen3:8b</p>
+    <section class="podium player-red" id="podium-red">
+      <h2>Red</h2>
+      <div class="robot" id="red-figure">🤖</div>
+      <p class="role" id="red-role">&mdash;</p>
+      <p class="sub" id="red-sub">Red player</p>
     </section>
 
     <section class="box-area">
@@ -34,10 +35,11 @@
       <p id="turns" class="turns"></p>
     </section>
 
-    <section class="podium" id="podium-you">
-      <h2 id="right-title">You (Guesser)</h2>
-      <div class="robot">🕵️</div>
-      <p class="sub" id="right-sub">the detective</p>
+    <section class="podium player-blue" id="podium-blue">
+      <h2>Blue</h2>
+      <div class="robot" id="blue-figure">🧑</div>
+      <p class="role" id="blue-role">&mdash;</p>
+      <p class="sub" id="blue-sub">Blue player</p>
     </section>
   </main>
 
@@ -51,8 +53,8 @@
         <p id="seats-summary" class="seats-summary">Loading seat config&hellip;</p>
       </div>
 
-      <fieldset class="seat-editor" id="seat-left">
-        <legend>Box Holder (Left)</legend>
+      <fieldset class="seat-editor" id="seat-red">
+        <legend>Red player</legend>
         <label class="setting"><span>Player</span>
           <select data-field="kind">
             <option value="ai">AI</option>
@@ -83,8 +85,8 @@
         </div>
       </fieldset>
 
-      <fieldset class="seat-editor" id="seat-right">
-        <legend>Guesser (Right)</legend>
+      <fieldset class="seat-editor" id="seat-blue">
+        <legend>Blue player</legend>
         <label class="setting"><span>Player</span>
           <select data-field="kind">
             <option value="human">Human (you)</option>
@@ -116,10 +118,6 @@
       </fieldset>
       <datalist id="ollama-models"></datalist>
 
-      <label class="setting" id="model-select-row">
-        <span>Box Holder model (this round)</span>
-        <select id="model-select"></select>
-      </label>
       <label class="setting bypass-row">
         <input id="bypass-check" type="checkbox" />
         <span class="bypass-label">Bypass leaderboard settings</span>
@@ -151,6 +149,13 @@
     </div>
     <div id="autoplay-controls" class="play-controls hidden">
       <button id="autoplay-btn" class="btn big">Auto-Play Round</button>
+    </div>
+    <div id="hold-controls" class="play-controls hidden">
+      <p id="hold-secret" class="hold-secret"></p>
+      <div class="say-row">
+        <input id="hold-input" type="text" placeholder="Bluff the Guesser — sell your story..." autocomplete="off" />
+        <button id="hold-btn" class="btn">Send bluff</button>
+      </div>
     </div>
   </section>
 

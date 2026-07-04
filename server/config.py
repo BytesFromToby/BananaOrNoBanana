@@ -13,7 +13,10 @@ DEFAULTS = {
     "prior": 0.5,
     "ollama_url": "http://127.0.0.1:11434",
     "seat": "human_guesser",
+    "human_role": "guesser",
 }
+
+VALID_HUMAN_ROLES = ("guesser", "holder")
 
 # The published standard conditions for leaderboard play. Rounds run at other
 # settings are fine ("bypass leaderboard settings") but are logged non-standard
@@ -31,9 +34,16 @@ def is_standard(turn_limit, temperature) -> bool:
 
 
 def load_config(path: str = "config.json") -> dict:
-    """Return DEFAULTS updated by the JSON at `path` if it exists; defaults unchanged if absent."""
+    """Return DEFAULTS updated by the JSON at `path` if it exists; defaults unchanged if absent.
+
+    `human_role` is read from the environment (`HUMAN_ROLE`), lowercased/stripped, and
+    validated to `guesser` or `holder` (anything else falls back to `guesser`) — it governs
+    which role a human player takes when one seat is human.
+    """
     config = dict(DEFAULTS)
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             config.update(json.load(f))
+    human_role = (os.environ.get("HUMAN_ROLE") or "guesser").strip().lower()
+    config["human_role"] = human_role if human_role in VALID_HUMAN_ROLES else "guesser"
     return config

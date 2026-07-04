@@ -2,7 +2,7 @@
 log each one, and print the local leaderboard.
 
 Usage: python -m server.batch --rounds 10 [--turn-limit 3]
-Seats come from .env (or the settings panel, which writes .env); the right seat
+Seats come from .env (or the settings panel, which writes .env); both colors
 must be AI. Drives the same game.advance_round engine as the /advance endpoint.
 """
 import argparse
@@ -47,18 +47,17 @@ def main(argv=None):
 
     config = load_config()
     players = load_players(os.environ)
-    if players["right"].kind != "ai":
+    if players["blue"].kind != "ai" or players["red"].kind != "ai":
         sys.exit(
-            "The right seat (Guesser) is human — a batch needs two AI seats.\n"
-            "Set RIGHT_PLAYER_TYPE=ai in .env or flip the seat in the settings panel."
+            "A batch needs both colors AI — an AI-vs-AI matchup with rotating roles.\n"
+            "Set RED_PLAYER_TYPE=ai and BLUE_PLAYER_TYPE=ai in .env or flip the seats "
+            "in the settings panel."
         )
-    if players["left"].kind != "ai":
-        sys.exit("The left seat (Box Holder) must be AI.")
 
     print(
         f"Batch: {args.rounds} rounds — "
-        f"{players['left'].provider}/{players['left'].model or config['box_holder_model']} (holder) vs "
-        f"{players['right'].provider}/{players['right'].model} (guesser)\n"
+        f"Red {players['red'].provider}/{players['red'].model or config['box_holder_model']} vs "
+        f"Blue {players['blue'].provider}/{players['blue'].model} (roles rotate)\n"
     )
     asyncio.run(run_batch(args.rounds, config, players, turn_limit=args.turn_limit))
     print()

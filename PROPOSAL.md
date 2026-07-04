@@ -63,7 +63,7 @@ Swap who sits in each chair:
 | AI | AI | The pure experiment — run many, vary models, measure deviation from 50%. |
 | Human | AI | Can you out-bluff the detector? |
 | AI | Human | Can you catch the machine's lie? The most fun to *play* — you're the detective. |
-| Human | Human | Party game; Bot B@rker reveals and calls it. |
+| ~~Human~~ | ~~Human~~ | ~~Party game.~~ **Dropped 2026-07-02 — permanent non-goal.** Every game has at least one AI player. |
 
 ## Delivery — play vs lab
 
