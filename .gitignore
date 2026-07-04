@@ -28,5 +28,5 @@ npm-debug.log*
 # Runtime round audit log (data, not source)
 logs/
 
-# Claude Code local permissions (machine-local)
-.claude/settings.local.json
+# Claude Code local tooling config (machine-local)
+.claude/

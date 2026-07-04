@@ -83,7 +83,7 @@ Local-only, single user, no auth. One active round at a time is fine. Windows ho
 
 ## 12. Roadmap — everything wanted, in rough order
 
-What's already in: v1 round loop ✅ · settings UI (model/turn-limit/temperature panel) ✅ · multi-provider human/AI seats + AI-Guesser autoplay ✅ · seat credential editors in the panel ✅ · strict `FINAL ANSWER` parse on the AI path (item 1) ✅ · seat-aware logging (item 2) ✅ · batch runner + local leaderboard, `python -m server.batch --rounds N` / `python -m server.stats` (item 3) ✅ · **community arena code (item 10): client submission (`--submit` / `python -m server.submit`) + Cloudflare Worker ingest & public leaderboard under `arena/` ✅ — automated tests pass; live Cloudflare deploy + real-submission + browser render remain as human-required follow-ups.**
+What's already in: v1 round loop ✅ · retro stage + scripted Bot B@rker ✅ · settings UI (model/turn-limit/temperature panel) ✅ · multi-provider human/AI seats + AI-Guesser autoplay ✅ · seat credential editors in the panel ✅ · **human Box Holder seat (item 6): `/hold` endpoint + `hold_round` engine + `hold-controls` UI — all three seat combinations now play end-to-end ✅** · Red/Blue role rotation ✅ · strict `FINAL ANSWER` parse on the AI path (item 1) ✅ · seat-aware logging (item 2) ✅ · batch runner + local leaderboard, `python -m server.batch --rounds N` / `python -m server.stats` (item 3) ✅ · seat config persists to `.env` (partial item 11) ✅ · **community arena (item 10): client submission (`--submit` / `python -m server.submit`) + Cloudflare Worker ingest & public leaderboard under `arena/` — LIVE at https://banana-arena.bytesbytoby.workers.dev, serving real submissions ✅.**
 
 Still wanted (roughly prioritized; each is its own feature spec when picked up):
 
@@ -92,7 +92,7 @@ Still wanted (roughly prioritized; each is its own feature spec when picked up):
 3. **AI-vs-AI batch runner + local leaderboard** — the actual experiment. Run N rounds per matchup unattended; leaderboard is win-rate-vs-coin-flip (deviation from 50%) per (box-holder-model × guesser-model), with forced-default rounds excluded. CLI or lab page; this is the project's reason to exist, and it must work fully offline/locally before any of the community layer (item 10) exists.
 4. **Streamed autoplay** — `/advance` (or a successor) streams both seats' lines token-by-token so watching AI-vs-AI feels like live banter, not turn dumps.
 5. **Spectator dramatic irony** — an audience-only view showing the Box Holder's stripped `<think>` reasoning ("it's a banana; I'll say empty") beside the public stage. Never reaches the Guesser — the viewer is in on the con. Reasoning is captured server-side at generation time and logged.
-6. **Human Box Holder seats** — human-vs-AI (out-bluff the detector) and human-vs-human party mode; the seat plumbing already exists, this is the UI for a human left seat.
+6. **Human Box Holder seat** ✅ **DONE** — human-vs-AI (out-bluff the detector). Shipped as `/hold` + `hold_round` (mirrors the AI-guesser flow, box revealed only to the human holder) + the `hold-controls` bluff UI. *(Specced 2026-07-02 as part of Red/Blue role rotation. A two-human party mode is a **permanent non-goal** — every game has at least one AI player.)*
 7. **LLM-driven Bot B@rker** — color commentary generated per round (reads the transcript at reveal), replacing/augmenting the scripted pools. Host stays showbiz, never judge.
 8. **Sound + Price-is-Right beats** — buzzer/ding/sting/applause/box-open whoosh; "Come on down!" round start; the Big Wheel as the round-settings control; applause-meter/sad-trombone audience flavor.
 9. **Win-condition variants** — cooperative (Box Holder wins when Guesser is *right* — Password/Pyramid mode) and hidden-mode (Guesser must work out friend-or-liar). One incentive line changes; parked until the adversarial data is boring.
@@ -102,7 +102,7 @@ Still wanted (roughly prioritized; each is its own feature spec when picked up):
     - **Central side (small on purpose):** one validating ingest endpoint + a database + a public read-only leaderboard page (e.g. Cloudflare Worker + D1, or one tiny VPS). No user accounts in v1; anonymous submissions with client-generated run IDs.
     - **Trust model (decided):** self-reported results from untrusted clients cannot be made cheat-proof, so don't pretend. Mitigations: every submission must include **full transcripts** (fake tallies are cheap; N in-character transcripts are expensive and auditable), rate limiting, and a separate **"verified"** tier for runs executed by the maintainer/trusted parties. Honor system for the rest — banana-sized stakes.
     - **Side benefit:** the transcript depository doubles as the deception-dialogue corpus for later fine-tuning work.
-11. **Settings persistence** — chosen settings survive a server restart (today: per-round only, `config.json` is the baseline).
+11. **Settings persistence** — *partially done:* seat config (provider/model/API key) persists to `.env` via `persist_seat_env`. Still owed: the **match settings** (turn limit, temperature) survive a server restart — today they reset to the `config.json` baseline each start.
 
 ## 13. Decision log
 - Adversarial bluff (Box Holder wins on a wrong guess) — the equilibrium-deviation experiment is the point.

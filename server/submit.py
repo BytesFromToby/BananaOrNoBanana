@@ -14,7 +14,7 @@ import httpx
 from server.arena import build_payload, get_or_create_client_id, is_submittable
 from server.stats import load_rounds
 
-DEFAULT_ARENA_URL = "https://banana-arena.example.workers.dev"
+DEFAULT_ARENA_URL = "https://banana-arena.bytesbytoby.workers.dev"
 _SUBMITTED_PATH = os.path.join("logs", "submitted.jsonl")
 _ROUNDS_PATH = os.path.join("logs", "rounds.jsonl")
 
