@@ -25,6 +25,16 @@ ENV_PATH = ".env"  # seat config is persisted here; tests point this at a tmp fi
 app = FastAPI(title="Banana or No Banana")
 
 
+@app.middleware("http")
+async def no_stale_assets(request, call_next):
+    """Make browsers revalidate web/ assets on every load; StaticFiles answers
+    unchanged files with a cheap 304 via ETag/Last-Modified."""
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 class SayBody(BaseModel):
     text: str
 
