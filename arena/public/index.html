@@ -5,24 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Banana or No Banana — Global Leaderboard</title>
   <style>
-    :root { --gold: #e0a422; --orange: #d4651a; --cream: #f5e9c8; --brown: #6b3e15; --deep: #3a2408; }
-    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--cream);
-           color: var(--deep); padding: 24px; }
-    h1 { color: var(--orange); text-align: center; margin: 0 0 4px; }
-    .sub { text-align: center; color: var(--brown); margin: 0 0 20px; font-size: 14px; }
-    .controls { text-align: center; margin-bottom: 16px; }
-    button { font-size: 14px; padding: 6px 14px; border: 3px solid var(--gold); border-radius: 6px;
-             background: #fff; color: var(--deep); cursor: pointer; margin: 0 4px; }
-    button.active { background: var(--gold); font-weight: bold; }
-    table { border-collapse: collapse; margin: 0 auto; max-width: 960px; width: 100%;
-            background: #fff; border: 4px solid var(--gold); }
-    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #e6d8b0; }
-    th { background: var(--gold); color: var(--deep); text-transform: uppercase; font-size: 12px; }
+    /* Matches the game client's studio theme: dark charcoal, banana-gold accent. */
+    :root {
+      --bg: #0e1116; --bg-raise: #141a22; --card: #1a212c; --border: #2a3442;
+      --text: #e9edf3; --muted: #93a0b4; --faint: #6b7789;
+      --accent: #f2c94c; --accent-deep: #b8912a;
+      --pos: #4caf6e; --neg: #e05a4e;
+    }
+    body { margin: 0; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+           background: radial-gradient(1200px 500px at 50% -200px, rgba(242, 201, 76, 0.07), transparent 70%), var(--bg);
+           color: var(--text); padding: 36px 24px; -webkit-font-smoothing: antialiased; }
+    h1 { text-align: center; margin: 0 0 4px; font-size: 32px; font-weight: 700; letter-spacing: -0.02em; }
+    .sub { text-align: center; color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+    .controls { text-align: center; margin-bottom: 18px; }
+    button { font-size: 13px; font-weight: 600; font-family: inherit; padding: 8px 16px;
+             border: 1px solid var(--border); border-radius: 8px;
+             background: var(--card); color: var(--muted); cursor: pointer; margin: 0 4px;
+             transition: background 0.15s ease, color 0.15s ease; }
+    button:hover { color: var(--text); }
+    button.active { background: var(--accent); border-color: var(--accent); color: #14100a; }
+    table { border-collapse: separate; border-spacing: 0; margin: 0 auto; max-width: 960px; width: 100%;
+            background: var(--bg-raise); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; }
+    tr:last-child td { border-bottom: none; }
+    th { background: var(--card); color: var(--muted); text-transform: uppercase; font-size: 11px;
+         font-weight: 600; letter-spacing: 0.07em; }
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    .dev-pos { color: #2e7d32; } .dev-neg { color: #b23b2e; }
-    .explain { max-width: 960px; margin: 14px auto; font-size: 13px; color: var(--brown); line-height: 1.5; }
-    .empty { text-align: center; color: var(--brown); padding: 24px; }
-    a { color: var(--orange); }
+    .dev-pos { color: var(--pos); } .dev-neg { color: var(--neg); }
+    .explain { max-width: 960px; margin: 16px auto; font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .explain b { color: var(--text); }
+    .empty { text-align: center; color: var(--faint); padding: 28px; }
+    a { color: var(--accent); }
   </style>
 </head>
 <body>
