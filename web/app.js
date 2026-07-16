@@ -92,6 +92,49 @@ function describeSeat(seat) {
   return `AI — ${seat.provider}${seat.model ? " / " + seat.model : ""}`;
 }
 
+// Inline SVG avatars, tinted by the seat's color via CSS `currentColor`.
+// The two AI robots are deliberately different builds so an AI-vs-AI match reads as two players.
+const AVATAR_HUMAN = `
+  <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="24" cy="15" r="8"/>
+    <path d="M8 42c2.5-9 8.5-13 16-13s13.5 4 16 13"/>
+  </svg>`;
+
+const AVATARS = {
+  red: {
+    human: AVATAR_HUMAN,
+    ai: `
+  <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <line x1="24" y1="10" x2="24" y2="6"/>
+    <circle cx="24" cy="4.5" r="2" fill="currentColor" stroke="none"/>
+    <rect x="10" y="10" width="28" height="25" rx="6"/>
+    <circle cx="18" cy="20" r="2.6" fill="currentColor" stroke="none"/>
+    <circle cx="30" cy="20" r="2.6" fill="currentColor" stroke="none"/>
+    <path d="M19 27.5v3.5M24 27.5v3.5M29 27.5v3.5"/>
+    <path d="M17 40v3M31 40v3" opacity="0.55"/>
+  </svg>`,
+  },
+  blue: {
+    human: AVATAR_HUMAN,
+    ai: `
+  <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <line x1="16" y1="10" x2="14" y2="5.5"/>
+    <circle cx="13.3" cy="4" r="1.9" fill="currentColor" stroke="none"/>
+    <line x1="32" y1="10" x2="34" y2="5.5"/>
+    <circle cx="34.7" cy="4" r="1.9" fill="currentColor" stroke="none"/>
+    <rect x="10" y="10" width="28" height="26" rx="9"/>
+    <rect x="16" y="17.5" width="16" height="6.5" rx="3.25" fill="currentColor" stroke="none"/>
+    <circle cx="20" cy="30" r="1.4" fill="currentColor" stroke="none"/>
+    <circle cx="24" cy="30" r="1.4" fill="currentColor" stroke="none"/>
+    <circle cx="28" cy="30" r="1.4" fill="currentColor" stroke="none"/>
+    <path d="M5.5 20v8M42.5 20v8" opacity="0.55"/>
+  </svg>`,
+  },
+};
+
 async function loadPlayers() {
   try {
     const resp = await fetch("/api/players");
@@ -104,8 +147,8 @@ async function loadPlayers() {
     PLAYERS.red.kind === "human" ? "red" : PLAYERS.blue.kind === "human" ? "blue" : null;
   el("seats-summary").textContent =
     `Red: ${describeSeat(PLAYERS.red)} · Blue: ${describeSeat(PLAYERS.blue)}`;
-  el("red-figure").textContent = PLAYERS.red.kind === "human" ? "🧑" : "🤖";
-  el("blue-figure").textContent = PLAYERS.blue.kind === "human" ? "🧑" : "🤖";
+  el("red-figure").innerHTML = AVATARS.red[PLAYERS.red.kind] || AVATARS.red.ai;
+  el("blue-figure").innerHTML = AVATARS.blue[PLAYERS.blue.kind] || AVATARS.blue.ai;
   el("red-sub").textContent = describeSeat(PLAYERS.red);
   el("blue-sub").textContent = describeSeat(PLAYERS.blue);
   fillSeatEditor("red");
