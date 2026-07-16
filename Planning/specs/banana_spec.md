@@ -120,7 +120,7 @@ Human Box Holder mode (new interaction, when the human chooses to hold):
 - The human types the opening + replies (bluffing) via `POST /api/round/{id}/hold` `{text}`; each call feeds the human's line to the AI Guesser and returns the Guesser's response — either a continuation or a `FINAL ANSWER` lock-in ending the round. Mirrors `/advance` with the roles reversed. `prompts/box_holder.md` is not used (the human bluffs themselves); the AI Guesser uses `prompts/guesser.md`.
 - Scoring is unchanged: the Guesser wins iff correct, so the human-as-holder wins when the AI Guesser calls it wrong.
 
-- Input: `RED_PLAYER_*` / `BLUE_PLAYER_*` env vars and `PUT /api/players/{red|blue}` (same shape as before). Human role choice via config/settings (`HUMAN_ROLE`=guesser|holder, default guesser) applied when a human is present. `POST /api/round/{id}/hold {text}` for the human-holder path.
+- Input: `RED_PLAYER_*` / `BLUE_PLAYER_*` env vars and `PUT /api/players/{red|blue}` (same shape as before). Human role choice via config/settings (`HUMAN_ROLE`=guesser|holder, default guesser) applied when a human is present; *(amended 2026-07-16)* the settings panel exposes the choice as a "Your role" selector (shown only when a seat is human) backed by `PUT /api/human_role {role}`, which updates the live config and persists `HUMAN_ROLE` to `.env`. `POST /api/round/{id}/hold {text}` for the human-holder path.
 - Output: `GET /api/players` → `{"red": {...}, "blue": {...}}` (never `api_key`), plus the round's assigned `holder`/`guesser` colors. Round state carries `holder_color` and `guesser_color`; the log records both colors alongside the existing per-role provider/model (so leaderboard aggregation, which already groups by box_holder×guesser role+model, captures rotation with no change).
 - The per-round `model` override (Match settings) is **deprecated** — with rotation, "the box holder's model" is ambiguous; each color's model comes from its own config. `turn_limit`/`temperature` (standard-settings) are unchanged.
 
@@ -133,6 +133,7 @@ Human Box Holder mode (new interaction, when the human chooses to hold):
 - Env `RED_PLAYER_*` / `BLUE_PLAYER_*` load the two colors; a migration keeps an existing `.env` working (or is migrated in place).  `[automated]`
 - The stage renders Red as red and Blue as blue, shows who is holding vs guessing each game, and — when the human is the Box Holder — presents the secret + a bluff-input control instead of the question/lock-in controls.  `[human-required]`
 - Over an AI-vs-AI batch of an even number of rounds between two distinct models, each model holds and guesses an equal number of times.  `[automated]`
+- *(Amended 2026-07-16.)* `PUT /api/human_role` validates guesser|holder (422 otherwise), persists `HUMAN_ROLE` to `.env`, and governs the next round's role assignment without a restart; `GET /api/players` reports the current choice.  `[automated]`
 
 ## Assumptions (Red/Blue rotation)
 - Hard rename `LEFT_PLAYER_*`→`RED_PLAYER_*`, `RIGHT_PLAYER_*`→`BLUE_PLAYER_*`; the local `.env` is migrated in place (single local user; no long back-compat window). — assumed.

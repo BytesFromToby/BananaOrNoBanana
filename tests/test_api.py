@@ -241,7 +241,7 @@ def test_players_endpoint_hides_api_key(client):
     resp = client.get("/api/players")
     assert resp.status_code == 200
     data = resp.json()
-    assert set(data) == {"red", "blue"}
+    assert set(data) == {"red", "blue", "human_role"}
     for seat in ("red", "blue"):
         assert set(data[seat]) == {"kind", "provider", "model", "base_url", "has_key"}
         assert "api_key" not in data[seat]
@@ -451,7 +451,7 @@ def test_round_records_colors_and_players_endpoint_red_blue(client, monkeypatch)
 
     got = client.get("/api/players")
     data = got.json()
-    assert set(data) == {"red", "blue"}
+    assert set(data) == {"red", "blue", "human_role"}
     for seat in ("red", "blue"):
         assert set(data[seat]) == {"kind", "provider", "model", "base_url", "has_key"}
         assert "api_key" not in data[seat]
@@ -567,3 +567,36 @@ def test_round_rejects_two_human_seats(client, monkeypatch):
     })
     resp = client.post("/api/round")
     assert resp.status_code == 422
+
+
+# --- Human role choice from the browser: PUT /api/human_role ---
+
+def test_put_human_role_governs_next_round_and_persists(client, env_file, fresh_players, monkeypatch):
+    import server.app as appmod
+    monkeypatch.setitem(appmod.CONFIG, "human_role", "guesser")
+
+    resp = client.put("/api/human_role", json={"role": "holder"})
+    assert resp.status_code == 200
+    assert resp.json() == {"human_role": "holder"}
+    assert "HUMAN_ROLE=holder" in env_file.read_text()          # survives restarts
+    assert client.get("/api/players").json()["human_role"] == "holder"
+
+    # The very next round seats the human (blue) as Box Holder — no restart needed.
+    round_resp = client.post("/api/round")
+    assert round_resp.status_code == 200
+    data = round_resp.json()
+    assert data["holder_color"] == "blue"
+    assert data["guesser_color"] == "red"
+
+    # Switching back governs the round after, without a restart.
+    assert client.put("/api/human_role", json={"role": "guesser"}).status_code == 200
+    assert "HUMAN_ROLE=guesser" in env_file.read_text()
+
+
+def test_put_human_role_rejects_invalid_and_changes_nothing(client, env_file, monkeypatch):
+    import server.app as appmod
+    monkeypatch.setitem(appmod.CONFIG, "human_role", "guesser")
+    resp = client.put("/api/human_role", json={"role": "referee"})
+    assert resp.status_code == 422
+    assert appmod.CONFIG["human_role"] == "guesser"
+    assert not env_file.exists()

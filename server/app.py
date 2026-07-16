@@ -12,11 +12,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from server import game
-from server.config import load_config
+from server.config import VALID_HUMAN_ROLES, load_config
 from server.host import verdict_line
 from server.log import append_round
 from server.ollama_client import list_models
-from server.players import build_seat, load_players, persist_seat_env, public_view
+from server.players import build_seat, load_players, persist_env, persist_seat_env, public_view
 
 CONFIG = load_config()
 PLAYERS = load_players(os.environ)
@@ -67,8 +67,29 @@ async def models():
 
 @app.get("/api/players")
 async def players():
-    """Browser-safe seat info — kind/provider/model/base_url/has_key, never api_key."""
-    return {"red": public_view(PLAYERS["red"]), "blue": public_view(PLAYERS["blue"])}
+    """Browser-safe seat info — kind/provider/model/base_url/has_key, never api_key.
+    Carries the current `human_role` choice so the settings UI can show it."""
+    return {
+        "red": public_view(PLAYERS["red"]),
+        "blue": public_view(PLAYERS["blue"]),
+        "human_role": CONFIG["human_role"],
+    }
+
+
+class HumanRoleBody(BaseModel):
+    role: str
+
+
+@app.put("/api/human_role")
+async def update_human_role(body: HumanRoleBody):
+    """Set which role a human seat takes (guesser|holder). Governs every round
+    until changed; persisted to .env (HUMAN_ROLE) so it survives restarts."""
+    role = body.role.strip().lower()
+    if role not in VALID_HUMAN_ROLES:
+        raise HTTPException(status_code=422, detail=f"role must be one of {VALID_HUMAN_ROLES}")
+    CONFIG["human_role"] = role
+    persist_env({"HUMAN_ROLE": role}, path=ENV_PATH)
+    return {"human_role": role}
 
 
 @app.put("/api/players/{seat}")

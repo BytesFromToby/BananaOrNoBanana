@@ -145,6 +145,9 @@ async function loadPlayers() {
   }
   humanColor =
     PLAYERS.red.kind === "human" ? "red" : PLAYERS.blue.kind === "human" ? "blue" : null;
+  // Role choice only means something when a human is seated; AI-vs-AI auto-rotates.
+  el("human-role-setting").classList.toggle("hidden", !humanColor);
+  el("human-role-select").value = PLAYERS.human_role || "guesser";
   el("seats-summary").textContent =
     `Red: ${describeSeat(PLAYERS.red)} · Blue: ${describeSeat(PLAYERS.blue)}`;
   el("red-figure").innerHTML = AVATARS.red[PLAYERS.red.kind] || AVATARS.red.ai;
@@ -448,6 +451,18 @@ el("temp-input").addEventListener("input", (e) => {
   el("temp-value").textContent = e.target.value;
 });
 el("bypass-check").addEventListener("change", (e) => setBypass(e.target.checked));
+el("human-role-select").addEventListener("change", async (e) => {
+  try {
+    const resp = await fetch("/api/human_role", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: e.target.value }),
+    });
+    if (!resp.ok) throw new Error("rejected");
+  } catch (err) {
+    await loadPlayers(); // snap the select back to the server's truth
+  }
+});
 el("autoplay-btn").addEventListener("click", autoPlay);
 for (const seat of ["red", "blue"]) {
   seatField(seat, "kind").addEventListener("change", () => refreshSeatEditor(seat));

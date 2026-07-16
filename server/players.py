@@ -161,6 +161,12 @@ def persist_seat_env(prefix: str, cfg: PlayerConfig, path: str = ".env") -> None
         f"{prefix}_BASE_URL": cfg.base_url,
         f"{prefix}_API_KEY": cfg.api_key,
     }
+    persist_env(values, path=path)
+
+
+def persist_env(values: dict, path: str = ".env") -> None:
+    """Replace-or-append `KEY=value` lines in the .env file; all other lines
+    are preserved byte-for-byte."""
     lines = []
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
