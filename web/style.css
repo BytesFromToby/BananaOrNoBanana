@@ -427,5 +427,7 @@ body {
   color: var(--accent);
   margin: 0 0 18px;
 }
+.reveal-winner.red { color: var(--red); }
+.reveal-winner.blue { color: var(--blue); }
 
 .hidden { display: none; }

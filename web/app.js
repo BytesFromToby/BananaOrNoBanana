@@ -425,13 +425,17 @@ function revealBox(data) {
   const humanWon =
     (data.winner === "guesser" && humanColor === guesserColor) ||
     (data.winner === "box_holder" && humanColor === holderColor);
-  el("reveal-winner").textContent = humanColor
-    ? humanWon
-      ? "You win! 🎉"
-      : "You lose!"
-    : data.winner === "guesser"
-    ? "Guesser wins!"
-    : "Box Holder wins!";
+  const winEl = el("reveal-winner");
+  winEl.classList.remove("red", "blue");
+  if (humanColor) {
+    winEl.textContent = humanWon ? "You win! 🎉" : "You lose!";
+  } else {
+    // Neutral AI-vs-AI: name the winning seat, tinted in its color.
+    const winnerColor = data.winner === "guesser" ? guesserColor : holderColor;
+    const roleName = data.winner === "guesser" ? "Guesser" : "Box Holder";
+    winEl.textContent = `The ${winnerColor === "red" ? "Red" : "Blue"} ${roleName} Wins!`;
+    winEl.classList.add(winnerColor);
+  }
   el("reveal").classList.remove("hidden");
 }
 
